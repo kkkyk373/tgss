@@ -11,9 +11,10 @@ class CommutingODDataset(Dataset):
     1つの area (= フォルダ) を 1サンプルとみなし、
     x: (N, N, F)   y: (N, N)  を返す Dataset
     """
-    def __init__(self, root, areas):
+    def __init__(self, root, areas, toy_flag=False):
         self.root = root
         self.areas = areas.copy()
+        self.toy_flag = toy_flag
 
     def __len__(self):
         return len(self.areas)
@@ -50,9 +51,10 @@ class CommutingODDataset(Dataset):
 
 
 class CommutingODPairDataset(torch.utils.data.Dataset):
-    def __init__(self, root, areas): 
+    def __init__(self, root, areas, toy_flag=False):
         self.root = root
         self.areas = areas.copy()
+        self.toy_flag = toy_flag
 
         self.samples = []
         for area in self.areas:
@@ -94,8 +96,19 @@ class CommutingODPairDataset(torch.utils.data.Dataset):
         return demos, pois, dis, od
 
     def _make_feature_tensor(self, demos, pois, dis):
-        feat = demos[:, [0]]  # (N,1)
-        # feat = np.concatenate([demos, pois], axis=1)   # (N, F)
+        """
+            特徴量テンソルを作成する関数
+            :param demos: (N, D_d)  各地点の人口情報
+            :param pois: (N, D_p)   各地点のPOI情報
+            :param dis: (N, N)     各地点間の距離行列
+            :return: (N, N, F)     特徴量テンソル
+        """
+        # 総人口情報のみを用いる場合
+        if self.toy_flag:
+            feat = demos[:, [0]] # (N,1)
+        else: # 調査情報全てとPOIも用いる場合
+            feat = np.concatenate([demos, pois], axis=1) # (N,F) 
+            
         N = feat.shape[0]
         feat_o = feat[:, None, :]                      # (N,1,F)
         feat_d = feat[None, :, :]                      # (1,N,F)
