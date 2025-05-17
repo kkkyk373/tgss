@@ -1,18 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=jcomm
-#SBATCH --partition=cluster_long
-#SBATCH --cpus-per-task=52
-#SBATCH --time=4-04:00:00
+#SBATCH --partition=cluster_short
+#SBATCH --cpus-per-task=8
+#SBATCH --time=04:00:00
 
-METHOD="gbrt"
-PREFIX="jcomm"
+METHOD="rf"
+PREFIX="example"
 DATE=$(date +%Y%m%d_%H%M)
 PARTITION_NAME=$SLURM_JOB_PARTITION
 
 mkdir -p logs results
 
-export OUT_FILE="outs/${PREFIX}_${METHOD}_${PARTITION_NAME}_${DATE}.txt"
-export ERR_FILE="errs/${PREFIX}_${METHOD}_${PARTITION_NAME}_${DATE}.txt"
+export OUT_FILE="logs/${PREFIX}_${METHOD}_${PARTITION_NAME}_${DATE}.txt"
+export ERR_FILE="logs/${PREFIX}_${METHOD}_${PARTITION_NAME}_${DATE}.txt"
 
 exec > "$OUT_FILE" 2> "$ERR_FILE"
 
@@ -20,7 +20,7 @@ echo "Start time: $(date)"
 SECONDS=0
 
 # 実行
-PYTHONPATH=. python "sr/examples/run_$METHOD.py"
+PYTHONPATH=. python "src/examples/run_$METHOD.py"
 EXIT_CODE=$?
 
 DURATION=$SECONDS
