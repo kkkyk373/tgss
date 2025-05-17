@@ -19,7 +19,6 @@ ComOD-dataset.tar.gz
 errs/
 outs/
 logs/
-target_sets/
 
 .DS_Store
 .ipynb_checkpoints/
