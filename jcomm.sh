@@ -9,7 +9,7 @@ PREFIX="jcomm"
 DATE=$(date +%Y%m%d_%H%M)
 PARTITION_NAME=$SLURM_JOB_PARTITION
 
-mkdir -p outs errs
+mkdir -p logs results
 
 export OUT_FILE="outs/${PREFIX}_${METHOD}_${PARTITION_NAME}_${DATE}.txt"
 export ERR_FILE="errs/${PREFIX}_${METHOD}_${PARTITION_NAME}_${DATE}.txt"
@@ -20,7 +20,7 @@ echo "Start time: $(date)"
 SECONDS=0
 
 # 実行
-python "run_$METHOD.py"
+PYTHONPATH=. python "sr/examples/run_$METHOD.py"
 EXIT_CODE=$?
 
 DURATION=$SECONDS
