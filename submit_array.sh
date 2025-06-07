@@ -38,7 +38,7 @@ source /work/hideki-h/jcomm/env/bin/activate
 cd /work/hideki-h/jcomm
 
 # === 出力ファイル名 ===
-OUTFILE="${RESULTS_DIR}/selective_${MODEL}_${COND}_seed${SEED}_alpha${ALPHA}_topk${TOP_K}_max${MAX_SAMPLES}_${DATE}.txt"
+OUTFILE="${RESULTS_DIR}/topk${TOP_K}_alpha${ALPHA}_selective_seed${SEED}_${COND}_${MODEL}_max${MAX_SAMPLES}_${DATE}.txt"
 
 
 # === 実行 ===

@@ -4,3 +4,5 @@ POT==0.9.5
 torch==2.7.0
 tqdm==4.67.1
 scikit-learn==1.6.1
+numpy==2.2.5
+pandas==2.2.5

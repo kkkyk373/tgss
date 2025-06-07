@@ -15,12 +15,13 @@ ComOD-dataset/
 data/
 ComOD-dataset.tar.gz
 
-# Logs
-errs/
-outs/
-logs/
-
 .DS_Store
 .ipynb_checkpoints/
 .python-version
 ._ComOD-dataset
+
+# Logs
+errs/
+outs/
+logs/
+Untitled.ipynb
