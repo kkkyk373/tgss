@@ -18,8 +18,8 @@ SEED=${seeds[$SLURM_ARRAY_TASK_ID]}
 COND=${conds[$SLURM_ARRAY_TASK_ID]}
 
 # === 固定設定 ===
-MODEL="rf"
-ALPHA=50
+MODEL="svr"
+ALPHA=0
 TOP_K=100
 MAX_SAMPLES=5000
 DATE=$(date +%Y%m%d_%H%M)
@@ -39,7 +39,6 @@ cd /work/hideki-h/jcomm
 
 # === 出力ファイル名 ===
 OUTFILE="${RESULTS_DIR}/topk${TOP_K}_alpha${ALPHA}_selective_seed${SEED}_${COND}_${MODEL}_max${MAX_SAMPLES}_${DATE}.txt"
-
 
 # === 実行 ===
 PYTHONPATH=. python -u "$SCRIPT" \
