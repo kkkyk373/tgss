@@ -37,7 +37,6 @@ def extract_xy(data_dir, areas, max_samples=None, seed=42):
     return X, y
 
 
-# run_single_target 関数の変更点
 def run_single_target(target, area_ids, dist_mat, source_ids, args):
     tidx = np.where(area_ids == target)[0][0]
     sidx = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
