@@ -1,135 +1,221 @@
-"""
-    Support Vector Regression (SVR) example with Optuna for hyperparameter tuning.
-"""
-
+# === run_selective_svr.py (Optuna + internal data split) ===
+import argparse
 import numpy as np
 from sklearn.svm import SVR
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split # train_test_splitをインポート
 from src.utils.dataset import CommutingODPairDataset
-from src.utils.split_areas import load_all_areas, split_train_valid_test
-
+import random
+import os
+import sys
 import optuna # Optunaをインポート
 import warnings
 
-# Optunaのワーニングを抑制する場合 (optional)
+# Optunaのワーニングを抑制 (optional)
 warnings.filterwarnings("ignore", category=optuna.exceptions.ExperimentalWarning)
 
-# ---------- 1. Data Preparation (unchanged from your sample) ----------
-data_dir = "/Users/hideki-h/Desktop/実験用データ/ComOD-dataset/data"
-areas = load_all_areas(dir_path=data_dir, if_shuffle=False)
-train_areas, valid_areas, _ = split_train_valid_test(
-    areas,
-    train_ratio=0.1, valid_ratio=0.1, test_ratio=0.1,
-    seed=42 # シード値を追加して再現性を確保
-)
 
-# データセットの準備
-train_dataset = CommutingODPairDataset(data_dir, train_areas)
-valid_dataset = CommutingODPairDataset(data_dir, valid_areas)
+def load_fgw_distances(fgw_dir, alpha):
+    area_ids = np.load(f"{fgw_dir}/fgw_area_ids.npy")
+    dist_mat = np.memmap(f"{fgw_dir}/fgw_dist_{alpha:02d}.dat", dtype=np.float32, mode="r", shape=(len(area_ids), len(area_ids)))
+    return area_ids, dist_mat
 
-# 特徴量とターゲットを抽出
-def extract_features_and_targets(dataset):
-    X = np.array([sample["x"] for sample in dataset])  # 特徴量
-    y = np.array([sample["y"] for sample in dataset])  # ターゲット
+
+def extract_xy(data_dir, areas, max_samples=None, seed=42):
+    ds = CommutingODPairDataset(data_dir, areas)
+    X = np.stack([s["x"] for s in ds])
+    y = np.stack([s["y"] for s in ds])
+    
+    # max_samplesが指定されており、かつデータ数がそれより多い場合
+    if max_samples and len(X) > max_samples:
+        # np.random.seed(seed) は呼び出し元のseedに依存するため、
+        # ここでは常に同じサブセットを選ぶようにseedを固定する
+        # もしくは、関数外で設定されたseedをargs経由で渡す
+        rng = np.random.default_rng(seed) # 最新の推奨される乱数ジェネレータ
+        idx = rng.choice(len(X), max_samples, replace=False)
+        X, y = X[idx], y[idx]
     return X, y
 
-X_train, y_train = extract_features_and_targets(train_dataset)
-X_valid, y_valid = extract_features_and_targets(valid_dataset)
 
-print(f"X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
-print(f"X_valid shape: {X_valid.shape}, y_valid shape: {y_valid.shape}")
+# run_single_target 関数の変更点
+def run_single_target(target, area_ids, dist_mat, source_ids, args):
+    tidx = np.where(area_ids == target)[0][0]
+    sidx = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
+    dists = dist_mat[tidx]
 
+    if args.condition == "topk":
+        selected = sidx[np.argsort(dists[sidx])[:args.top_k]]
+    elif args.condition == "bottomk":
+        selected = sidx[np.argsort(-dists[sidx])[:args.bottom_k]]
+    elif args.condition == "random":
+        selected = np.random.choice(sidx, args.top_k, replace=False) # np.random.choiceはグローバルseedに依存
+    else:
+        raise ValueError("Unknown condition")
 
-# ---------- 2. Optuna Objective Function ----------
-# Optunaが最適化を行う目的関数を定義します。
-# trial: Optunaが提供するオブジェクトで、ハイパーパラメータの試行値を提案します。
-def objective(trial):
-    # SVRのハイパーパラメータをOptunaに提案させる
-    # C: 正則化パラメータ。対数スケールで0.1から1000までを探索。
-    C = trial.suggest_loguniform('C', 1e-1, 1e3)
-    # epsilon: マージン内の許容誤差。対数スケールで0.01から1までを探索。
-    epsilon = trial.suggest_loguniform('epsilon', 1e-2, 1e0)
-    # kernel: カーネルの種類。'rbf', 'linear', 'poly', 'sigmoid' から選択。
-    kernel = trial.suggest_categorical('kernel', ['rbf', 'linear', 'poly', 'sigmoid'])
+    # ここで訓練に使用するソースエリアのデータを取得
+    # このデータは、SVRのハイパーパラメータチューニングのための内部訓練・検証に用いられる
+    source_X, source_y = extract_xy(args.data_dir, area_ids[selected], args.max_samples, seed=args.seed)
+    
+    # ターゲットエリアのテストデータを取得
+    X_test_final, y_test_final = extract_xy(args.data_dir, [target], args.max_samples, seed=args.seed)
 
-    # kernelが'poly'の場合のみdegree（次数）を探索
-    degree = 3 # デフォルト値。もしpoly以外で使われることがないなら影響なし
-    if kernel == 'poly':
-        degree = trial.suggest_int('degree', 2, 5) # 2から5の整数
+    # =========================================================================
+    # Optuna を用いたSVRのハイパーパラメータチューニング
+    # objective 関数: 最適化したい指標（RMSE）を返す関数を定義
+    def objective(trial):
+        # 訓練データをさらに内部で訓練用と検証用に分割
+        # Optunaの各trial内で一貫した分割を行うため、ここでrandom_stateを固定する
+        # ただし、args.seedを直接使うと、親ループのseedと混同するため、
+        # trial.suggest_intでランダムなシードを生成することも可能
+        # 今回は、args.seedを基点としたランダムなシードを使うか、シンプルに固定値にする
+        # ここでは、args.seedを使い、再現性を確保しつつ試行ごとの分割を固定
+        try:
+            # 訓練データが十分にない場合を考慮し、最低限の分割を試みる
+            # train_sizeで訓練データの割合、test_sizeで検証データの割合
+            # stratifyはyが分類問題の場合に層化抽出するが、回帰なのでNone
+            # random_stateはOptunaのtrialごとに同じになるようにargs.seedを使う
+            X_train_inner, X_valid_inner, y_train_inner, y_valid_inner = train_test_split(
+                source_X, source_y, test_size=0.2, random_state=args.seed, shuffle=True
+            )
+        except ValueError as e:
+            # train_test_splitが失敗した場合 (例: データ数が少なすぎる)
+            print(f"Warning: Not enough data for train_test_split in trial {trial.number}. Error: {e}")
+            return float('inf') # これも大きな値を返してペナルティ
 
-    # gamma: カーネル係数。'rbf', 'poly', 'sigmoid'の場合に探索。
-    # 'scale'と'auto'も選択肢に入れる
-    gamma = 'scale' # デフォルト値
-    if kernel in ['rbf', 'poly', 'sigmoid']:
-        gamma = trial.suggest_categorical('gamma', ['scale', 'auto', 1e-2, 1e-1, 1e0, 1e1])
+        # 探索するハイパーパラメータの範囲を定義
+        C = trial.suggest_loguniform('C', 1e-1, 1e3)
+        epsilon = trial.suggest_loguniform('epsilon', 1e-2, 1e0)
+        kernel = trial.suggest_categorical('kernel', ['rbf', 'linear', 'poly', 'sigmoid'])
 
+        degree = 3
+        if kernel == 'poly':
+            degree = trial.suggest_int('degree', 2, 5)
 
-    # SVRモデルのインスタンス化
-    model = SVR(
-        C=C,
-        epsilon=epsilon,
-        kernel=kernel,
-        degree=degree,
-        gamma=gamma,
-        cache_size=200, # キャッシュサイズは計算効率に影響
-        max_iter=10000, # 収束しない場合の最大イテレーション数を設定
-                       # これを設定しないと、収束しない場合に無限ループになる可能性
+        gamma = 'scale'
+        if kernel in ['rbf', 'poly', 'sigmoid']:
+            gamma = trial.suggest_categorical('gamma', ['scale', 'auto', 1e-2, 1e-1, 1e0, 1e1])
+
+        # SVRモデルのインスタンス化
+        model = SVR(
+            C=C,
+            epsilon=epsilon,
+            kernel=kernel,
+            degree=degree,
+            gamma=gamma,
+            cache_size=200,
+            max_iter=10000 # 収束しない場合のために最大イテレーションを設定
+        )
+
+        # モデルの訓練 (内部訓練データを使用)
+        try:
+            model.fit(X_train_inner, y_train_inner)
+        except ValueError as e:
+            print(f"SVR fit error in trial {trial.number}: {e}")
+            return float('inf')
+
+        # 内部検証データでの評価
+        y_pred_inner = model.predict(X_valid_inner)
+        mse_inner = mean_squared_error(y_valid_inner, y_pred_inner)
+
+        return mse_inner # 最小化したい指標（内部検証MSE）を返す
+
+    # OptunaのStudyを作成し、最適化を実行
+    # 各ターゲットエリア/ソースエリア選択組み合わせに対し、個別のStudyを作成
+    # samplerのseedは再現性のため
+    study = optuna.create_study(direction='minimize', sampler=optuna.samplers.TPESampler(seed=args.seed))
+    # n_trials: 試行回数。計算リソースと相談して決める
+    # timeout: 最大実行時間（秒）。
+    # verbose=FalseでOptunaの各試行の詳細ログを抑制し、出力を見やすくする
+    study.optimize(objective, n_trials=50, timeout=600, show_progress_bar=False) # progress_barはColab/Jupyter向け
+
+    # 最適なパラメータを持つSVRモデルを最終的に構築
+    best_params = study.best_params
+    
+    # 注意: ここではsource_X, source_y (元の選ばれたソースエリアデータ全体) で最終学習
+    # もし、訓練・検証分割後のX_train_innerで学習したい場合はロジックを調整
+    # 一般的には、チューニングで最適なパラメータを見つけたら、
+    # そのパラメータで「利用可能な全ての訓練データ」を使って最終モデルを学習します。
+    final_model = SVR(
+        C=best_params['C'],
+        epsilon=best_params['epsilon'],
+        kernel=best_params['kernel'],
+        degree=best_params.get('degree', 3),
+        gamma=best_params.get('gamma', 'scale'),
+        cache_size=200,
+        max_iter=10000
     )
+    final_model.fit(source_X, source_y) # 選ばれたソースエリアデータ全体で最終学習
 
-    # モデルの学習
-    # SVRのfitが収束しないなど、エラーを発生する可能性があるためtry-exceptで囲む
-    try:
-        model.fit(X_train, y_train)
-    except ValueError as e:
-        # SVRが収束しないなどのエラーが出た場合、大きな値を返すことでペナルティを与える
-        print(f"Trial {trial.number} failed to fit with params: {trial.params}. Error: {e}")
-        return float('inf') # RMSEを最小化したいので、エラー時は非常に大きな値を返す
+    # 最終的なターゲットエリアのテストデータでの評価
+    pred_final = final_model.predict(X_test_final)
+    mse_final = mean_squared_error(y_test_final, pred_final)
+    # =========================================================================
 
-    # 検証データでの予測
-    y_pred = model.predict(X_valid)
+    # mse_finalを返すように変更
+    return mse_final, len(y_test_final), len(source_X) # 訓練データのサイズはsource_Xのサイズとする
 
-    # 評価指標 (MSE) の計算
-    mse = mean_squared_error(y_valid, y_pred)
 
-    return mse # Optunaはこれを最小化しようとします
+def run_all_targets(area_ids, dist_mat, source_ids, args):
+    print("[INFO] Entered run_all_targets", flush=True)
+    print(f"[INFO] Loading targets from {args.targets_path}", flush=True)
 
-# ---------- 3. Optuna Study Creation and Optimization ----------
-# OptunaのStudyを作成
-# direction='minimize' は、目的関数（objectiveが返す値）を最小化することを目指すことを示します。
-print("Creating Optuna study...")
-study = optuna.create_study(direction='minimize', sampler=optuna.samplers.TPESampler(seed=42))
+    with open(args.targets_path) as f:
+        targets_raw = [line.strip() for line in f if line.strip()]
+    targets = [t for t in targets_raw if t in area_ids]
 
-# 最適化の実行
-# n_trials: 試行するハイパーパラメータの組み合わせの数
-# timeout: 最適化を停止するまでの最大時間（秒）
-print("Starting Optuna optimization...")
-study.optimize(objective, n_trials=50, timeout=300) # 例: 50回の試行、最大5分
+    total_mse, total_test = 0, 0
+    print(f"[INFO] Evaluating {len(targets)} targets...", flush=True)
 
-# ---------- 4. Best Model Evaluation ----------
-print("\nOptimization finished.")
-print(f"Number of finished trials: {len(study.trials)}")
-print(f"Best trial:")
-trial = study.best_trial
+    for i, target in enumerate(targets):
+        print(f"[{i+1}/{len(targets)}] {target}", flush=True)
+        try:
+            # run_single_targetは既にOptunaによるチューニングと評価を含む
+            mse, test_n, train_n = run_single_target(target, area_ids, dist_mat, source_ids, args)
+            total_mse += mse * test_n
+            total_test += test_n
+            print(f"MSE: {mse:.4f} (train={train_n}, test={test_n})\n", flush=True)
+        except Exception as e:
+            print(f"[ERROR] Failed on {target}: {e}", flush=True)
+            # エラーが発生したターゲットについては、計算から除外するか、
+            # もしくは大きなエラー値を加算するなどの対応を検討
+            # ここでは単にスキップ
+            continue # エラーのターゲットはスキップ
 
-print(f"  Value (MSE): {trial.value:.6f}")
-print("  Params: ")
-for key, value in trial.params.items():
-    print(f"    {key}: {value}")
+    if total_test:
+        print(f"\n[RESULT] Overall MSE: {total_mse / total_test:.4f} over {total_test} samples", flush=True)
+    else:
+        print("[WARNING] No evaluation performed.", flush=True)
 
-# 最適なハイパーパラメータでSVRモデルを再構築し、最終評価
-print("\nTraining final SVR model with best parameters...")
-final_model = SVR(
-    C=trial.params['C'],
-    epsilon=trial.params['epsilon'],
-    kernel=trial.params['kernel'],
-    degree=trial.params.get('degree', 3), # 'degree'はpolyカーネルの時のみ存在
-    gamma=trial.params.get('gamma', 'scale'), # 'gamma'は線形カーネルの時など存在しない場合がある
-    cache_size=200,
-    max_iter=10000
-)
-final_model.fit(X_train, y_train) # 訓練データ全体で学習
 
-# 最終モデルでの予測と評価 (検証データを使用)
-final_y_pred = final_model.predict(X_valid)
-final_mse = mean_squared_error(y_valid, final_y_pred)
-print(f"\nFinal Model Validation Mean Squared Error (with best params): {final_mse:.6f}")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', required=True)
+    parser.add_argument('--fgw_dir', required=True)
+    parser.add_argument('--targets_path', required=True)
+    parser.add_argument('--sources_path', required=True)
+    parser.add_argument('--condition', required=True, choices=['topk', 'bottomk', 'random'])
+    parser.add_argument('--top_k', type=int, default=100)
+    parser.add_argument('--bottom_k', type=int, default=100)
+    parser.add_argument('--alpha', type=int, default=50)
+    parser.add_argument('--max_samples', type=int, default=None)
+    parser.add_argument('--seed', type=int, default=42) # シード引数を追加
+    args = parser.parse_args()
+
+    # 全体の乱数シードを設定
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+    os.environ['PYTHONHASHSEED'] = str(args.seed)
+
+    print("[INFO] Loading FGW distances...", flush=True)
+    area_ids, dist_mat = load_fgw_distances(args.fgw_dir, args.alpha)
+
+    print(f"[INFO] Loading source area IDs from {args.sources_path}", flush=True)
+    with open(args.sources_path) as f:
+        source_ids = [line.strip() for line in f if line.strip()]
+
+    print("[INFO] Starting evaluation...", flush=True)
+    run_all_targets(area_ids, dist_mat, source_ids, args)
+
+
+if __name__ == "__main__":
+    main()
