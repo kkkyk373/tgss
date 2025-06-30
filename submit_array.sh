@@ -46,8 +46,9 @@ cd /work/hideki-h/jcomm
 if [ "$COND" == "all" ]; then
     ALPHA_STR="all"
 else
-    ALPHA_STR="${ALPHA_VAL}" # 他の条件では通常の数値アルファ値
+    ALPHA_STR="${ALPHA_VAL}"
 fi
+
 
 # === 出力ファイル名 ===
 OUTFILE="${RESULTS_DIR}/topk${TOP_K}_alpha${ALPHA_STR}_selective_seed${SEED}_${COND}_${MODEL}_max${MAX_SAMPLES}_${DATE}.txt"
