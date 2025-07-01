@@ -1,3 +1,6 @@
+"""
+    Run Gravity Model Training Example
+"""
 import torch, torch.nn as nn, torch.nn.functional as F
 from torch.utils.data import DataLoader
 from src.utils.dataset import CommutingODPairDataset

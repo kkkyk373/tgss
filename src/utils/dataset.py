@@ -6,6 +6,7 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 
 
+# FIXME: toy_flag は使われていないので削除するか検討
 class CommutingODDataset(Dataset):
     """
     1つの area (= フォルダ) を 1サンプルとみなし、
@@ -50,7 +51,13 @@ class CommutingODDataset(Dataset):
         return {"x": x, "y": y, "area": area}
 
 
+
 class CommutingODPairDataset(torch.utils.data.Dataset):
+    """
+        1つの area (= フォルダ) 内の地点間ペアをサンプルとする Dataset
+        x: (F,)  y: scalar
+        各地点間のペア (i, j) がひとつのサンプルを形成します。
+    """
     def __init__(self, root, areas, toy_flag=False):
         self.root = root
         self.areas = areas.copy()
