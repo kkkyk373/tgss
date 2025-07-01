@@ -113,7 +113,9 @@ def run_single_target(target, area_ids, dist_mat, source_ids, args):
 
     # 学習データとテストデータを抽出
     X_train, y_train = extract_xy(args.data_dir, selected_areas, args.max_samples, seed=args.seed)
-    X_test, y_test = extract_xy(args.data_dir, [target], seed=args.seed)
+    print("debug messages --------- After extracting training data ---------")
+    X_test, y_test = extract_xy(args.data_dir, [target], args.max_samples, seed=args.seed)
+    print("debug messages --------- After extracting test data ---------")
 
     if len(X_train) == 0:
         print(f"    [WARN] No training data for selected sources. Skipping.", flush=True)
