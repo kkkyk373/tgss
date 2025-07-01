@@ -22,17 +22,91 @@ def load_fgw_distances(fgw_dir, alpha):
     return area_ids, dist_mat
 
 
+# def extract_xy(data_dir, areas, max_samples=None, seed=42):
+#     """指定されたエリアのデータセットから特徴量(X)とターゲット(y)を抽出する"""
+#     ds = CommutingODPairDataset(data_dir, areas)
+#     if len(ds) == 0:
+#         return np.array([]), np.array([])
+#     X = np.stack([s["x"] for s in ds])
+#     y = np.stack([s["y"] for s in ds])
+#     if max_samples and len(X) > max_samples:
+#         np.random.seed(seed)
+#         idx = np.random.choice(len(X), max_samples, replace=False)
+#         X, y = X[idx], y[idx]
+#     return X, y
+
+
 def extract_xy(data_dir, areas, max_samples=None, seed=42):
-    """指定されたエリアのデータセットから特徴量(X)とターゲット(y)を抽出する"""
-    ds = CommutingODPairDataset(data_dir, areas)
-    if len(ds) == 0:
+    """
+    元のextract_xyと論理的に等価な結果を、メモリ効率良く生成する関数。
+    """
+    # max_samplesが指定されていない場合（例: テストデータ抽出）、従来通り全件ロード
+    if not max_samples:
+        ds = CommutingODPairDataset(data_dir, areas)
+        if len(ds) == 0: return np.array([]), np.array([])
+        X = np.stack([s["x"] for s in ds])
+        y = np.stack([s["y"] for s in ds])
+        return X, y
+
+    print(f"    [Data] Starting logically-equivalent sampling from {len(areas)} areas...", flush=True)
+    np.random.seed(seed)
+
+    # ステップ1: 各エリアのサンプル数を事前に計算（データは読み込まない）
+    area_sizes = [len(CommutingODPairDataset(data_dir, [area])) for area in areas]
+    total_samples = sum(area_sizes)
+
+    if total_samples == 0:
         return np.array([]), np.array([])
-    X = np.stack([s["x"] for s in ds])
-    y = np.stack([s["y"] for s in ds])
-    if max_samples and len(X) > max_samples:
-        np.random.seed(seed)
-        idx = np.random.choice(len(X), max_samples, replace=False)
-        X, y = X[idx], y[idx]
+    
+    # サンプリング数が利用可能な合計サンプル数を超える場合は、全サンプルを利用
+    if total_samples <= max_samples:
+        return extract_xy(data_dir, areas, max_samples=None, seed=seed)
+
+    # ステップ2: 仮想的な巨大プールからインデックスを抽選
+    global_indices_to_sample = np.random.choice(total_samples, max_samples, replace=False)
+    global_indices_to_sample.sort() # 後処理のためにソート
+
+    # ステップ3 & 4: インデックスをマッピングし、必要なデータのみを抽出
+    X_list, y_list = [], []
+    current_global_idx_ptr = 0
+    cumulative_size = 0
+
+    for area, size in zip(areas, area_sizes):
+        if size == 0:
+            continue
+        
+        # このエリアが担当するグローバルインデックスの範囲を特定
+        start_range = cumulative_size
+        end_range = cumulative_size + size
+        
+        # 抽選されたインデックスのうち、このエリアの範囲に含まれるものを探す
+        indices_in_this_area_range = global_indices_to_sample[
+            (global_indices_to_sample >= start_range) & (global_indices_to_sample < end_range)
+        ]
+
+        if len(indices_in_this_area_range) > 0:
+            # グローバルインデックスをローカルインデックスに変換
+            local_indices = indices_in_this_area_range - start_range
+            
+            # このエリアのデータセットを読み込み、必要なサンプルだけを抽出
+            ds_single = CommutingODPairDataset(data_dir, [area])
+            X_area = np.stack([ds_single[i]["x"] for i in local_indices])
+            y_area = np.stack([ds_single[i]["y"] for i in local_indices])
+            
+            X_list.append(X_area)
+            y_list.append(y_area)
+
+        cumulative_size += size
+
+    # 最後にリストを結合して最終的な配列を作成
+    X = np.concatenate(X_list, axis=0)
+    y = np.concatenate(y_list, axis=0)
+    
+    # 結合後、元のロジックと完全に一致させるためにシャッフルする
+    final_shuffle_idx = np.random.permutation(len(X))
+    X = X[final_shuffle_idx]
+    y = y[final_shuffle_idx]
+
     return X, y
 
 
