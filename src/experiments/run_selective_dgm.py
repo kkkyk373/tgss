@@ -12,6 +12,7 @@ import random
 import os
 import sys
 
+
 def load_fgw_distances(fgw_dir, alpha):
     """FGW距離データをロードする"""
     print("[INFO] Loading FGW distances...", flush=True)
@@ -19,6 +20,7 @@ def load_fgw_distances(fgw_dir, alpha):
     # memmapで巨大な距離行列を効率的に読み込む
     dist_mat = np.memmap(f"{fgw_dir}/fgw_dist_{alpha:02d}.dat", dtype=np.float32, mode="r", shape=(len(area_ids), len(area_ids)))
     return area_ids, dist_mat
+
 
 def extract_xy(data_dir, areas, max_samples=None, seed=42):
     """指定されたエリアのデータセットから特徴量(X)とターゲット(y)を抽出する"""
@@ -33,13 +35,16 @@ def extract_xy(data_dir, areas, max_samples=None, seed=42):
         X, y = X[idx], y[idx]
     return X, y
 
+
 def train_and_evaluate_dgm(X_train, y_train, X_test, y_test, args):
     """
     Deep Gravity Modelを学習させ、テストデータで評価する。
     PyTorchの学習ループを内包する。
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"[INFO] Using device: {device}", flush=True)
 
+    print("Debug messages --------- Before converting to tensors ---------")
     # NumPy配列をPyTorchテンソルに変換
     X_train_tensor = torch.from_numpy(X_train).float()
     y_train_tensor = torch.from_numpy(y_train).float()
@@ -85,6 +90,7 @@ def train_and_evaluate_dgm(X_train, y_train, X_test, y_test, args):
     mse = mean_squared_error(y_test, pred)
     return mse
 
+
 def run_single_target(target, area_ids, dist_mat, source_ids, args):
     """単一のターゲット都市に対して、ソース選択、学習、評価を行う"""
     tidx = np.where(area_ids == target)[0][0]
@@ -103,6 +109,8 @@ def run_single_target(target, area_ids, dist_mat, source_ids, args):
     
     selected_areas = area_ids[selected_indices]
 
+    print("debug messages --------- After selecting sources ---------")
+
     # 学習データとテストデータを抽出
     X_train, y_train = extract_xy(args.data_dir, selected_areas, args.max_samples, seed=args.seed)
     X_test, y_test = extract_xy(args.data_dir, [target], seed=args.seed)
@@ -113,12 +121,14 @@ def run_single_target(target, area_ids, dist_mat, source_ids, args):
     if len(X_test) == 0:
         print(f"    [WARN] No test data for target {target}. Skipping.", flush=True)
         return np.nan, 0, len(y_train)
-
+    
+    print("debug messages --------- After extracting data Before training ---------")
 
     # Deep Gravity Modelの学習と評価
     mse = train_and_evaluate_dgm(X_train, y_train, X_test, y_test, args)
     
     return mse, len(y_test), len(y_train)
+
 
 def run_all_targets(area_ids, dist_mat, source_ids, args):
     """全てのターゲット都市に対して評価を実行する"""
@@ -151,6 +161,7 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
         print(f"\n[RESULT] Overall MSE: {overall_mse:.4f} over {total_test_samples} samples", flush=True)
     else:
         print("[WARNING] No evaluation was performed.", flush=True)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Selective Transfer Learning with Deep Gravity Model")
