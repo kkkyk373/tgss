@@ -11,6 +11,7 @@ from tqdm import tqdm
 import random
 import os
 import sys
+import datetime
 
 
 def load_fgw_distances(fgw_dir, alpha):
@@ -20,20 +21,6 @@ def load_fgw_distances(fgw_dir, alpha):
     # memmapで巨大な距離行列を効率的に読み込む
     dist_mat = np.memmap(f"{fgw_dir}/fgw_dist_{alpha:02d}.dat", dtype=np.float32, mode="r", shape=(len(area_ids), len(area_ids)))
     return area_ids, dist_mat
-
-
-# def extract_xy(data_dir, areas, max_samples=None, seed=42):
-#     """指定されたエリアのデータセットから特徴量(X)とターゲット(y)を抽出する"""
-#     ds = CommutingODPairDataset(data_dir, areas)
-#     if len(ds) == 0:
-#         return np.array([]), np.array([])
-#     X = np.stack([s["x"] for s in ds])
-#     y = np.stack([s["y"] for s in ds])
-#     if max_samples and len(X) > max_samples:
-#         np.random.seed(seed)
-#         idx = np.random.choice(len(X), max_samples, replace=False)
-#         X, y = X[idx], y[idx]
-#     return X, y
 
 
 def extract_xy(data_dir, areas, max_samples=None, seed=42):
@@ -162,6 +149,20 @@ def train_and_evaluate_dgm(X_train, y_train, X_test, y_test, args):
         pred = pred_tensor.cpu().numpy()
 
     mse = mean_squared_error(y_test, pred)
+
+    # ── ここから追加 ──  ファイル名に seed, 条件, 日時を付与
+    now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname = (
+        f"dgm_alpha{args.alpha}"
+        f"_{args.condition}"
+        f"_seed{args.seed}"
+        f"_{now}.pt"
+    )
+    save_path = os.path.join(args.output_dir, fname)
+    torch.save(model.state_dict(), save_path)
+    print(f"[INFO] Saved model → {save_path}", flush=True)
+    # ── ここまで追加 ──
+
     return mse
 
 
@@ -263,6 +264,10 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help="Random seed for reproducibility.")
     
     args = parser.parse_args()
+
+    # 出力先ディレクトリを args に保持
+    args.output_dir = os.path.join(os.getcwd(), "outputs")
+    os.makedirs(args.output_dir, exist_ok=True)
 
     # シード値の設定
     random.seed(args.seed)
