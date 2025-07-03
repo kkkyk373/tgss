@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G         # Dry-runの結果を見て調整
-#SBATCH --time=0-08:00:00   # Dry-runの時間（約5.5時間）に少し余裕を持たせる
+#SBATCH --time=08:00:00   # Dry-runの時間（約5.5時間）に少し余裕を持たせる
 #SBATCH --array=0-17      # 2(cond) * 3(alpha) * 3(seed) = 18個のジョブ (0から17)
 
 # --- 実験パラメータの定義 ---
@@ -45,7 +45,7 @@ echo "Parameters: condition=${PARAM_COND}, alpha=${PARAM_ALPHA}, seed=${PARAM_SE
 echo "----------------------"
 
 # 仮想環境のアクティベート (ご自身の環境に合わせてください)
-source /work/hideki-h/jcomm/env/bin/activate
+source env/bin/activate
 
 python run_selective_dgm.py \
     --data_dir "/work/hideki-h/jcomm/ComOD-dataset/data" \
