@@ -1,58 +1,66 @@
 #!/bin/bash
-#SBATCH --job-name=dgm_selective_dry-run # ジョブ名を変更して単一実行であることを明示
+#SBATCH --job-name=dgm_exp
 #SBATCH --partition=gpu_long
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
 #SBATCH --gres=gpu:1
-#SBATCH --time=24:00:00
-#SBATCH --output=logs/%x_%j.out
-#SBATCH --error=logs/%x_%j.err
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G         # Dry-runの結果を見て調整
+#SBATCH --time=0-08:00:00   # Dry-runの時間（約5.5時間）に少し余裕を持たせる
+#SBATCH --array=0-17      # 2(cond) * 3(alpha) * 3(seed) = 18個のジョブ (0から17)
 
-# ===【フェーズ1】検証用パラメータを手動で設定 ===
-# ここで条件を変えながら、いくつかのパターンを試す
-ALPHA=0
-COND="topk"
-SEED=0
+# --- 実験パラメータの定義 ---
+CONDITIONS=("topk" "random")
+ALPHAS=(0 50 100)
+SEEDS=(0 1 2)
 
-# === 基本設定 ===
-DATE=$(date +%Y%m%d_%H%M)
-MODEL_NAME="dgm"
-TOP_K=100
-MAX_SAMPLES=50000
-EPOCHS=20
+# --- SLURMのタスクIDから各パラメータを計算 ---
+#  (この計算部分は変更不要です)
+NUM_CONDITIONS=${#CONDITIONS[@]}
+NUM_ALPHAS=${#ALPHAS[@]}
+NUM_SEEDS=${#SEEDS[@]}
 
-# === パス設定 ===
-DATA_DIR="/work/hideki-h/jcomm/ComOD-dataset/data"
-FGW_DIR="/work/hideki-h/jcomm/ComOD-dataset/outputs"
-TARGETS_PATH="source_target_lists/targets_seed${SEED}.txt"
-SOURCES_PATH="source_target_lists/sources_seed${SEED}.txt"
-SCRIPT_PATH="src/experiments/run_selective_dgm.py"
-RESULTS_DIR="results"
+SEED_I=$((SLURM_ARRAY_TASK_ID % NUM_SEEDS))
+TMP_I=$((SLURM_ARRAY_TASK_ID / NUM_SEEDS))
+ALPHA_I=$((TMP_I % NUM_ALPHAS))
+COND_I=$((TMP_I / NUM_ALPHAS))
 
-# === 実行準備 ===
+PARAM_COND=${CONDITIONS[$COND_I]}
+PARAM_ALPHA=${ALPHAS[$ALPHA_I]}
+PARAM_SEED=${SEEDS[$SEED_I]}
+
+# --- ログファイルのディレクトリを作成 ---
+LOG_DIR="logs/dgm_array"
+mkdir -p ${LOG_DIR}
+export OUT_FILE="${LOG_DIR}/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}.out"
+export ERR_FILE="${LOG_DIR}/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}.err"
+
+# --- 標準出力とエラー出力をリダイレクト ---
+exec > "$OUT_FILE" 2> "$ERR_FILE"
+
+
+# --- 環境設定と実行 ---
+echo "--- DGM Experiment ---"
+echo "Job ID: ${SLURM_JOB_ID}, Array Task ID: ${SLURM_ARRAY_TASK_ID}"
+echo "Timestamp: $(date)"
+echo "Parameters: condition=${PARAM_COND}, alpha=${PARAM_ALPHA}, seed=${PARAM_SEED}"
+echo "----------------------"
+
+# 仮想環境のアクティベート (ご自身の環境に合わせてください)
 source /work/hideki-h/jcomm/env/bin/activate
-cd /work/hideki-h/jcomm
 
-# === 出力ファイル名 ===
-# テスト実行なので、ファイル名に "dry-run" を含めて区別しやすくする
-OUTFILE="${RESULTS_DIR}/dry-run_${MODEL_NAME}_alpha${ALPHA}_seed${SEED}_${COND}_${DATE}.txt"
-
-# === 実行 ===
-echo "Starting single dry-run job for SEED=${SEED}, COND=${COND}, ALPHA=${ALPHA}"
-PYTHONPATH=. python -u "$SCRIPT_PATH" \
-    --data_dir "$DATA_DIR" \
-    --fgw_dir "$FGW_DIR" \
-    --targets_path "$TARGETS_PATH" \
-    --sources_path "$SOURCES_PATH" \
-    --condition "$COND" \
-    --alpha "$ALPHA" \
-    --top_k "$TOP_K" \
-    --bottom_k "$TOP_K" \
-    --max_samples "$MAX_SAMPLES" \
-    --seed "$SEED" \
-    --epochs "$EPOCHS" \
-    --batch_size 32 \
+python run_selective_dgm.py \
+    --data_dir "/work/hideki-h/jcomm/ComOD-dataset/data" \
+    --fgw_dir "/work/hideki-h/jcomm/ComOD-dataset/outputs" \
+    --targets_path "source_target_lists/targets_seed${PARAM_SEED}.txt" \
+    --sources_path "source_target_lists/sources_seed${PARAM_SEED}.txt" \
+    --results_dir "results" \
+    --model_output_dir "outputs" \
+    --condition "${PARAM_COND}" \
+    --alpha ${PARAM_ALPHA} \
+    --seed ${PARAM_SEED} \
+    --epochs 20 \
+    --max_samples 50000 \
     --lr 0.001 \
-    > "$OUTFILE"
+    --batch_size 32
 
-echo "Job finished."
+echo "--- Job Finished ---"
+echo "Timestamp: $(date)"

@@ -268,7 +268,7 @@ def main():
     final_output["metadata"]["execution_datetime"] = datetime.datetime.now().isoformat()
     
     results_save_dir = os.path.join(
-        args.results_dir, "dgm", "opt", 
+        args.results_dir, "dgm", "raw", 
         args.condition, 
         f"alpha{args.alpha}", 
         f"seed{args.seed}"
