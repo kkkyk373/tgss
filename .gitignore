@@ -22,6 +22,7 @@ logs/
 target_sets/
 results/
 results.tar.gz
+outputs/
 
 # Temporary files
 ._ComOD-dataset
