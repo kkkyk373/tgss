@@ -3,9 +3,9 @@
 #SBATCH --partition=gpu_long
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G         # Dry-runの結果を見て調整
-#SBATCH --time=08:00:00   # Dry-runの時間（約5.5時間）に少し余裕を持たせる
-#SBATCH --array=0-17      # 2(cond) * 3(alpha) * 3(seed) = 18個のジョブ (0から17)
+#SBATCH --mem=32G
+#SBATCH --time=0-08:00:00
+#SBATCH --array=0-17
 
 # --- 実験パラメータの定義 ---
 CONDITIONS=("topk" "random")
@@ -13,7 +13,6 @@ ALPHAS=(0 50 100)
 SEEDS=(0 1 2)
 
 # --- SLURMのタスクIDから各パラメータを計算 ---
-#  (この計算部分は変更不要です)
 NUM_CONDITIONS=${#CONDITIONS[@]}
 NUM_ALPHAS=${#ALPHAS[@]}
 NUM_SEEDS=${#SEEDS[@]}
@@ -33,9 +32,7 @@ mkdir -p ${LOG_DIR}
 export OUT_FILE="${LOG_DIR}/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}.out"
 export ERR_FILE="${LOG_DIR}/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}.err"
 
-# --- 標準出力とエラー出力をリダイレクト ---
 exec > "$OUT_FILE" 2> "$ERR_FILE"
-
 
 # --- 環境設定と実行 ---
 echo "--- DGM Experiment ---"
@@ -44,12 +41,13 @@ echo "Timestamp: $(date)"
 echo "Parameters: condition=${PARAM_COND}, alpha=${PARAM_ALPHA}, seed=${PARAM_SEED}"
 echo "----------------------"
 
-# 仮想環境のアクティベート (ご自身の環境に合わせてください)
-source env/bin/activate
+# 仮想環境のアクティベート
+source /work/hideki-h/jcomm/env/bin/activate
 
-python src/experiments/run_selective_dgm.py \
-    --data_dir "ComOD-dataset/data" \
-    --fgw_dir "ComOD-dataset/outputs" \
+# PYTHONPATHにカレントディレクトリを追加して実行
+PYTHONPATH=. python src/experiments/run_selective_dgm.py \
+    --data_dir "/work/hideki-h/jcomm/ComOD-dataset/data" \
+    --fgw_dir "/work/hideki-h/jcomm/ComOD-dataset/outputs" \
     --targets_path "source_target_lists/targets_seed${PARAM_SEED}.txt" \
     --sources_path "source_target_lists/sources_seed${PARAM_SEED}.txt" \
     --results_dir "results" \
