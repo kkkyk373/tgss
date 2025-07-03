@@ -47,7 +47,7 @@ echo "----------------------"
 # 仮想環境のアクティベート (ご自身の環境に合わせてください)
 source env/bin/activate
 
-python run_selective_dgm.py \
+python src/experiments/run_selective_dgm.py \
     --data_dir "ComOD-dataset/data" \
     --fgw_dir "ComOD-dataset/outputs" \
     --targets_path "source_target_lists/targets_seed${PARAM_SEED}.txt" \
