@@ -48,8 +48,8 @@ echo "----------------------"
 source env/bin/activate
 
 python run_selective_dgm.py \
-    --data_dir "/work/hideki-h/jcomm/ComOD-dataset/data" \
-    --fgw_dir "/work/hideki-h/jcomm/ComOD-dataset/outputs" \
+    --data_dir "ComOD-dataset/data" \
+    --fgw_dir "ComOD-dataset/outputs" \
     --targets_path "source_target_lists/targets_seed${PARAM_SEED}.txt" \
     --sources_path "source_target_lists/sources_seed${PARAM_SEED}.txt" \
     --results_dir "results" \
