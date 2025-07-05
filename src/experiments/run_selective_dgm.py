@@ -161,6 +161,8 @@ def run_single_target(target, area_ids, dist_mat, source_ids, args):
         selected_indices = sidx[np.argsort(-dists[sidx])[:args.bottom_k]]
     elif args.condition == "random":
         selected_indices = np.random.choice(sidx, args.top_k, replace=False)
+    elif args.condition == "all":
+        selected_indices = sidx
     else:
         raise ValueError(f"Unknown condition: {args.condition}")
     
@@ -228,7 +230,7 @@ def main():
     parser.add_argument('--model_output_dir', type=str, default='outputs', help="Directory to save trained models.")
     
     # --- Selection Strategy Arguments ---
-    parser.add_argument('--condition', type=str, required=True, choices=['topk', 'bottomk', 'random'], help="Source selection condition.")
+    parser.add_argument('--condition', type=str, required=True, choices=['topk', 'bottomk', 'random', 'all'], help="Source selection condition.")
     parser.add_argument('--top_k', type=int, default=100, help="Number of source areas for top-k/random.")
     parser.add_argument('--bottom_k', type=int, default=100, help="Number of source areas for bottom-k.")
     parser.add_argument('--alpha', type=int, default=50, help="Alpha value for FGW distance.")
