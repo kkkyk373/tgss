@@ -1,3 +1,8 @@
+"""
+早期に実験を行った random forest と support vector regression の結果は平文でログファイルに出力されている。
+このスクリプトは、これらのログファイルを読み込み、必要な情報を抽出して DataFrame に変換する。
+"""
+
 import glob, re, pathlib
 import pandas as pd
 

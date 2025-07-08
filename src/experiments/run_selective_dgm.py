@@ -1,4 +1,4 @@
-# === run_selective_dgm.py (全ての変更を反映した最終版) ===
+# === run_selective_dgm.py ===
 import argparse
 import numpy as np
 import torch
@@ -149,45 +149,30 @@ def train_and_evaluate_dgm(X_train, y_train, X_test, y_test, args):
     return mse
 
 
-def run_single_target(target, area_ids, dist_mat, source_ids, args):
-    """単一のターゲット都市に対して、ソース選択、学習、評価を行う"""
-    tidx = np.where(area_ids == target)[0][0]
-    sidx = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
-    dists = dist_mat[tidx]
-
-    if args.condition == "topk":
-        selected_indices = sidx[np.argsort(dists[sidx])[:args.top_k]]
-    elif args.condition == "bottomk":
-        selected_indices = sidx[np.argsort(-dists[sidx])[:args.bottom_k]]
-    elif args.condition == "random":
-        selected_indices = np.random.choice(sidx, args.top_k, replace=False)
-    elif args.condition == "all":
-        selected_indices = sidx
-    else:
-        raise ValueError(f"Unknown condition: {args.condition}")
-    
-    selected_areas = area_ids[selected_indices]
-
-    X_train, y_train = extract_xy(args.data_dir, selected_areas, args.max_samples, seed=args.seed)
-    X_test, y_test = extract_xy(args.data_dir, [target], max_samples=None, seed=args.seed)
-
-    if len(X_train) == 0:
-        print(f"    [WARN] No training data for selected sources. Skipping target {target}.", flush=True)
-        return np.nan, len(y_test), 0
-    if len(X_test) == 0:
-        print(f"    [WARN] No test data for target {target}. Skipping.", flush=True)
-        return np.nan, 0, len(y_train)
-    
-    mse = train_and_evaluate_dgm(X_train, y_train, X_test, y_test, args)
-    return mse, len(y_test), len(y_train)
-
-
 def run_all_targets(area_ids, dist_mat, source_ids, args):
-    """全てのターゲット都市に対して評価を実行し、結果のリストを返す"""
+    """
+    全てのターゲット都市に対して評価を実行し、結果のリストを返す。
+    'all'コンディションの場合は、学習データを最初に一度だけ読み込むように最適化されている。
+    """
     print(f"[INFO] Loading targets from {args.targets_path}", flush=True)
     with open(args.targets_path) as f:
         targets_raw = [line.strip() for line in f if line.strip()]
     targets = [t for t in targets_raw if t in area_ids]
+
+    # --- "all"コンディションの場合、学習データを事前に一度だけ準備 ---
+    X_train_all, y_train_all = None, None
+    if args.condition == "all":
+        print("[INFO] Condition is 'all'. Pre-loading training data once...", flush=True)
+        # ソースリストに含まれる全てのエリアIDを選択
+        sidx_all = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
+        selected_areas_all = area_ids[sidx_all]
+
+        # 学習データを抽出
+        X_train_all, y_train_all = extract_xy(args.data_dir, selected_areas_all, args.max_samples, seed=args.seed)
+
+        if len(X_train_all) == 0:
+            print("[ERROR] Pre-loading failed for 'all' condition. No training data found. Aborting.", file=sys.stderr, flush=True)
+            return [] # 学習データがなければ処理を中止
 
     results_list = []
     print(f"[INFO] Evaluating {len(targets)} targets...", flush=True)
@@ -195,21 +180,59 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
     for target in tqdm(targets, desc="Evaluating Targets"):
         print(f"--- Evaluating target: {target} ---", flush=True)
         try:
-            mse, test_n, train_n = run_single_target(target, area_ids, dist_mat, source_ids, args)
+            # --- 1. テストデータを読み込む (毎回必須) ---
+            X_test, y_test = extract_xy(args.data_dir, [target], max_samples=None, seed=args.seed)
+
+            # --- 2. 学習データを準備する ---
+            if args.condition == "all":
+                # "all"の場合は事前に読み込んだデータを使用
+                X_train, y_train = X_train_all, y_train_all
+            else:
+                # "all"以外は、従来通りターゲットごとにソースを選択して読み込む
+                tidx = np.where(area_ids == target)[0][0]
+                sidx = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
+                dists = dist_mat[tidx]
+
+                if args.condition == "topk":
+                    selected_indices = sidx[np.argsort(dists[sidx])[:args.top_k]]
+                elif args.condition == "bottomk":
+                    selected_indices = sidx[np.argsort(-dists[sidx])[:args.bottom_k]]
+                elif args.condition == "random":
+                    selected_indices = np.random.choice(sidx, args.top_k, replace=False)
+                else:
+                    raise ValueError(f"Unknown condition: {args.condition}")
+                
+                selected_areas = area_ids[selected_indices]
+                X_train, y_train = extract_xy(args.data_dir, selected_areas, args.max_samples, seed=args.seed)
+
+            # --- 3. データチェックと学習・評価 ---
+            if len(X_train) == 0 or len(y_train) == 0:
+                print(f"   [WARN] No training data for target {target}. Skipping.", flush=True)
+                status, mse_val = "skipped_no_train_data", None
+            elif len(X_test) == 0 or len(y_test) == 0:
+                print(f"   [WARN] No test data for target {target}. Skipping.", flush=True)
+                status, mse_val = "skipped_no_test_data", None
+            else:
+                mse_val = train_and_evaluate_dgm(X_train, y_train, X_test, y_test, args)
+                status = "success" if not np.isnan(mse_val) else "skipped_nan_mse"
+
+            # --- 4. 結果を格納 ---
             result_item = {
                 "target_id": target,
-                "mse": mse if not np.isnan(mse) else None,
-                "test_samples": test_n,
-                "train_samples": train_n,
-                "status": "success" if not np.isnan(mse) else "skipped_no_data"
+                "mse": mse_val if mse_val is not None else None,
+                "test_samples": len(y_test),
+                "train_samples": len(y_train),
+                "status": status
             }
             results_list.append(result_item)
-            if not np.isnan(mse):
-                print(f"    -> MSE: {mse:.4f} (train_n={train_n}, test_n={test_n})\n", flush=True)
+
+            if status == "success":
+                print(f"   -> MSE: {mse_val:.4f} (train_n={len(y_train)}, test_n={len(y_test)})\n", flush=True)
             else:
-                print(f"    -> Skipped due to no data.\n", flush=True)
+                print(f"   -> Skipped: {status}\n", flush=True)
+
         except Exception as e:
-            print(f"    [ERROR] Failed on target {target}: {e}\n", file=sys.stderr, flush=True)
+            print(f"   [ERROR] Failed on target {target}: {e}\n", file=sys.stderr, flush=True)
             error_item = {
                 "target_id": target, "mse": None, "test_samples": 0,
                 "train_samples": 0, "status": "error", "error_message": str(e)
