@@ -16,7 +16,7 @@ PARAM_ALPHA="0" # 'all'ではalphaは使われないが、引数として渡す�
 
 # ★★★★★ ここを修正しました ★★★★★
 # TASK_ID (0,1,2) を直接インデックスとして使用します
-PARAM_SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
+PARAM_SEED="${SEEDS[$SLURM_ARRAY_TASK_ID]}"
 
 # --- ログファイルのディレクトリを作成 ---
 LOG_DIR="logs/dgm_array_all" # ログのディレクトリを分けて管理

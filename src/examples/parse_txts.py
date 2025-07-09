@@ -3,7 +3,9 @@
 このスクリプトは、これらのログファイルを読み込み、必要な情報を抽出して DataFrame に変換する。
 """
 
-import glob, re, pathlib
+import glob
+import re
+import pathlib
 import pandas as pd
 
 # ---------- 設定 ----------
