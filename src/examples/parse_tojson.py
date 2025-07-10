@@ -55,7 +55,7 @@ def convert_classical_logs_to_json(
             alpha_str = parts[seed_index - 2]
             condition = parts[seed_index - 1]
             seed_str = parts[seed_index]
-            # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+            # End of file path interpretation logic
 
             alpha = int(re.search(r'alpha(\d+)', alpha_str).group(1))
             seed = int(re.search(r'seed(\d+)', seed_str).group(1))
