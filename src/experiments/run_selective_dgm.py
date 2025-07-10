@@ -89,7 +89,7 @@ def extract_xy(data_dir, areas, max_samples=None, seed=42):
     return X, y
 
 
-def train_and_evaluate_dgm(X_train, y_train, X_test, y_test, args):
+def train_and_evaluate_dgm(X_train, y_train, X_test, y_test, target_id, args):
     """
     Deep Gravity Modelを学習させ、テストデータで評価する。
     """
@@ -131,15 +131,21 @@ def train_and_evaluate_dgm(X_train, y_train, X_test, y_test, args):
     mse = mean_squared_error(y_test, pred)
 
     if args.model_output_dir:
-        model_save_dir = args.model_output_dir
+        model_save_dir = os.path.join(
+            args.model_output_dir, "dgm", "raw",
+            args.condition,
+            f"alpha{args.alpha}",
+            f"seed{args.seed}"
+        )
         os.makedirs(model_save_dir, exist_ok=True)
         
-        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")        
         fname = (
-            f"dgm_{now}"
+            f"dgm_target{target_id}" # ターゲットIDを追加
             f"_alpha{args.alpha}"
             f"_{args.condition}"
-            f"_seed{args.seed}.pt"
+            f"_seed{args.seed}"
+            f"_{now}.pt" # タイムスタンプは末尾の方がソートしやすい
         )
         save_path = os.path.join(model_save_dir, fname)
         
@@ -213,7 +219,7 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
                 print(f"   [WARN] No test data for target {target}. Skipping.", flush=True)
                 status, mse_val = "skipped_no_test_data", None
             else:
-                mse_val = train_and_evaluate_dgm(X_train, y_train, X_test, y_test, args)
+                mse_val = train_and_evaluate_dgm(X_train, y_train, X_test, y_test, target, args)
                 status = "success" if not np.isnan(mse_val) else "skipped_nan_mse"
 
             # --- 4. 結果を格納 ---
