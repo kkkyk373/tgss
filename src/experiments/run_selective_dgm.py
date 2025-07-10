@@ -132,7 +132,8 @@ def train_and_evaluate_dgm(X_train, y_train, X_test, y_test, target_id, args):
 
     if args.model_output_dir:
         model_save_dir = os.path.join(
-            args.model_output_dir, "dgm", "raw",
+            args.model_output_dir,
+            "dgm",
             args.condition,
             f"alpha{args.alpha}",
             f"seed{args.seed}"
