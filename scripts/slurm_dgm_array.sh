@@ -1,49 +1,45 @@
 #!/bin/bash
-#SBATCH --job-name=dgm_add_exp
+#SBATCH --job-name=dgm_unified
 #SBATCH --partition=gpu_long
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
-#SBATCH --time=0-08:00:00
-#SBATCH --array=0-11      # 9 (bottomk) + 3 (all) = 12 jobs
+#SBATCH --mem=40G
+#SBATCH --time=3-00:00:00
+#SBATCH --array=0-29 # 0-29 for 30 total jobs (27 with alpha × seed for topk/random/bottomk + 3 for all)
 
-# --- 実験パラメータの定義 ---
+# --- パラメータ定義 (ここを編集して実験を制御) ---
+CONDITIONS=("topk" "random" "bottomk" "all")
 ALPHAS=(0 50 100)
 SEEDS=(0 1 2)
 
-# --- SLURMのタスクIDから各パラメータを計算 ---
-TASK_ID=$SLURM_ARRAY_TASK_ID
+# --- パラメータ組み合わせを事前に定義 ---
+PARAMS=()
+# topk, random, bottomk (alphaあり)
+for seed in "${SEEDS[@]}"; do
+    for alpha in "${ALPHAS[@]}"; do
+        for cond in "topk" "random" "bottomk"; do
+            PARAMS+=("${cond} ${alpha} ${seed}")
+        done
+    done
+done
+# all (alphaなし)
+for seed in "${SEEDS[@]}"; do
+    PARAMS+=("all 0 ${seed}")
+done
 
-# 最初の9ジョブ (ID 0-8) は 'bottomk'
-if [ $TASK_ID -lt 9 ]; then
-    PARAM_COND="bottomk"
-    
-    NUM_SEEDS=3
-    
-    SEED_I=$((TASK_ID % NUM_SEEDS))
-    ALPHA_I=$((TASK_ID / NUM_SEEDS))
+# --- SlurmタスクIDからパラメータを取得 ---
+# SLURM_ARRAY_TASK_ID は 0 から始まる
+read PARAM_COND PARAM_ALPHA PARAM_SEED <<< "${PARAMS[$SLURM_ARRAY_TASK_ID]}"
 
-    PARAM_ALPHA=${ALPHAS[$ALPHA_I]}
-    PARAM_SEED=${SEEDS[$SEED_I]}
-else
-    # 残りの3ジョブ (ID 9-11) は 'all'
-    PARAM_COND="all"
-    PARAM_ALPHA="0" # 'all'ではalphaは使われないが、引数として渡すため便宜的に設定
-
-    SEED_I=$(( (TASK_ID - 9) % 3 ))
-    PARAM_SEED=${SEEDS[$SEED_I]}
-fi
-
-# --- ログファイルのディレクトリを作成 ---
-LOG_DIR="logs/dgm_array_additional" # ログのディレクトリを分けて管理
+# --- ログ設定 ---
+LOG_DIR="logs/dgm_unified/${PARAM_COND}/alpha${PARAM_ALPHA}"
 mkdir -p ${LOG_DIR}
-export OUT_FILE="${LOG_DIR}/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}.out"
-export ERR_FILE="${LOG_DIR}/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}.err"
-
+export OUT_FILE="${LOG_DIR}/${SLURM_JOB_ID}_seed${PARAM_SEED}.out"
+export ERR_FILE="${LOG_DIR}/${SLURM_JOB_ID}_seed${PARAM_SEED}.err"
 exec > "$OUT_FILE" 2> "$ERR_FILE"
 
 # --- 環境設定と実行 ---
-echo "--- DGM Additional Experiment ---"
+echo "--- DGM Unified Experiment ---"
 echo "Job ID: ${SLURM_JOB_ID}, Array Task ID: ${SLURM_ARRAY_TASK_ID}"
 echo "Timestamp: $(date)"
 echo "Parameters: condition=${PARAM_COND}, alpha=${PARAM_ALPHA}, seed=${PARAM_SEED}"
