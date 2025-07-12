@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=40G
 #SBATCH --time=3-00:00:00
-#SBATCH --array=0-29 # Total jobs: (3*3 + 3*3 + 3*1 + 3) = 9+9+3+3=24 ... おや、30かな？ (3*3 + 3*3 + 3*1 + 3) = (topk+random)*alpha*seed + bottomk*alpha*seed + all*seed = 2*3*3 + 1*3*3 + 1*3 = 18+9+3=30. array=0-29
+#SBATCH --array=0-29 # 0-29 for 30 total jobs (27 with alpha × seed for topk/random/bottomk + 3 for all)
 
 # --- パラメータ定義 (ここを編集して実験を制御) ---
 CONDITIONS=("topk" "random" "bottomk" "all")
