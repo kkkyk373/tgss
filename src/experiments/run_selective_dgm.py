@@ -202,14 +202,14 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
             if args.condition == "all":
                 X_train, y_train = X_train_all, y_train_all
 
-            else:
+            else:                
                 tidx = np.where(area_ids == target)[0][0]
-                dists = dist_mat[tidx]
+                dists = dist_mat[tidx, sidx]
 
                 if args.condition == "topk":
-                    selected_indices = sidx[np.argsort(dists[sidx])[:args.top_k]]
+                    selected_indices = sidx[np.argsort(dists)[:args.top_k]]
                 elif args.condition == "bottomk":
-                    selected_indices = sidx[np.argsort(-dists[sidx])[:args.bottom_k]]
+                    selected_indices = sidx[np.argsort(-dists)[:args.bottom_k]]
                 elif args.condition == "random":
                     selected_indices = np.random.choice(sidx, args.top_k, replace=False)
                 else:
