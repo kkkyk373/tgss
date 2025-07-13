@@ -45,7 +45,7 @@ echo "----------------------"
 source /work/hideki-h/jcomm/env/bin/activate
 
 # Pythonスクリプトの実行 (SVRはGPU不要)
-PYTHONPATH=. python src/experiments/run_selective_svr.py \
+PYTHONPATH=. python src/experiments/run_selective_svr_json.py \
     --data_dir "/work/hideki-h/jcomm/ComOD-dataset/data" \
     --fgw_dir "/work/hideki-h/jcomm/ComOD-dataset/outputs" \
     --targets_path "source_target_lists/targets_seed${PARAM_SEED}.txt" \
