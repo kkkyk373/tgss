@@ -30,7 +30,7 @@ def extract_xy(data_dir, areas, max_samples=None, seed=42):
     """
     元のextract_xyと論理的に等価な結果を、メモリ効率良く生成する関数。
     """
-    if not max_samples:
+    if max_samples is None:
         ds = CommutingODPairDataset(data_dir, areas)
         if len(ds) == 0: return np.array([]), np.array([])
         X = np.stack([s["x"] for s in ds])
@@ -90,9 +90,7 @@ def extract_xy(data_dir, areas, max_samples=None, seed=42):
 
 
 def train_and_evaluate_dgm(X_train, y_train, X_test, y_test, target_id, args):
-    """
-    Deep Gravity Modelを学習させ、テストデータで評価する。
-    """
+    """Deep Gravity Modelを学習させ、テストデータで評価する。"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"    [INFO] Using device: {device}", flush=True)
 
@@ -161,15 +159,20 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
     全てのターゲット都市に対して評価を実行し、結果のリストを返す。
     'all'コンディションの場合は、学習データを最初に一度だけ読み込むように最適化されている。
     """
+
     print(f"[INFO] Loading targets from {args.targets_path}", flush=True)
+
     with open(args.targets_path) as f:
         targets_raw = [line.strip() for line in f if line.strip()]
     targets = [t for t in targets_raw if t in area_ids]
 
     # --- "all"コンディションの場合、学習データを事前に一度だけ準備 ---
     X_train_all, y_train_all = None, None
+
     if args.condition == "all":
+
         print("[INFO] Condition is 'all'. Pre-loading training data once...", flush=True)
+
         # ソースリストに含まれる全てのエリアIDを選択
         sidx_all = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
         selected_areas_all = area_ids[sidx_all]
@@ -184,20 +187,23 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
     results_list = []
     print(f"[INFO] Evaluating {len(targets)} targets...", flush=True)
 
+    # sidxの計算をループの外に移動（最適化）
+    sidx = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
+
     for target in tqdm(targets, desc="Evaluating Targets"):
+
         print(f"--- Evaluating target: {target} ---", flush=True)
+
         try:
             # --- 1. テストデータを読み込む (毎回必須) ---
             X_test, y_test = extract_xy(args.data_dir, [target], max_samples=None, seed=args.seed)
 
             # --- 2. 学習データを準備する ---
             if args.condition == "all":
-                # "all"の場合は事前に読み込んだデータを使用
                 X_train, y_train = X_train_all, y_train_all
+
             else:
-                # "all"以外は、従来通りターゲットごとにソースを選択して読み込む
                 tidx = np.where(area_ids == target)[0][0]
-                sidx = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
                 dists = dist_mat[tidx]
 
                 if args.condition == "topk":

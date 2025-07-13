@@ -5,12 +5,11 @@ import datetime
 import os
 import random
 import sys
-import joblib # scikit-learnモデルの保存に使用
+import joblib 
 from tqdm import tqdm
 from sklearn.svm import SVR
 from sklearn.metrics import mean_squared_error
 from src.utils.dataset import CommutingODPairDataset
-
 
 def load_fgw_distances(fgw_dir, alpha):
     """FGW距離データをロードする"""
@@ -25,16 +24,16 @@ def load_fgw_distances(fgw_dir, alpha):
 
 def extract_xy(data_dir, areas, max_samples=None, seed=42):
     """
-    メモリ効率の良いデータ抽出関数 (DGMスクリプトから移植)
+    元のextract_xyと論理的に等価な結果を、メモリ効率良く生成する関数。
     """
-    if not max_samples:
+    if max_samples is None:
         ds = CommutingODPairDataset(data_dir, areas)
         if len(ds) == 0: return np.array([]), np.array([])
         X = np.stack([s["x"] for s in ds])
         y = np.stack([s["y"] for s in ds])
         return X, y
 
-    print(f"    [Data] Starting memory-efficient sampling from {len(areas)} areas...", flush=True)
+    print(f"    [Data] Starting logically-equivalent sampling from {len(areas)} areas...", flush=True)
     np.random.seed(seed)
 
     area_sizes = [len(CommutingODPairDataset(data_dir, [area])) for area in areas]
@@ -44,7 +43,7 @@ def extract_xy(data_dir, areas, max_samples=None, seed=42):
         return np.array([]), np.array([])
     
     if total_samples <= max_samples:
-        print(f"    [Data] Total samples ({total_samples}) <= max_samples ({max_samples}). Using all data.", flush=True)
+        print(f"    [Data] Total samples ({total_samples}) is less than or equal to max_samples ({max_samples}). Using all data.", flush=True)
         return extract_xy(data_dir, areas, max_samples=None, seed=seed)
 
     global_indices_to_sample = np.random.choice(total_samples, max_samples, replace=False)
@@ -52,41 +51,49 @@ def extract_xy(data_dir, areas, max_samples=None, seed=42):
 
     X_list, y_list = [], []
     cumulative_size = 0
+
     for area, size in zip(areas, area_sizes):
-        if size == 0: continue
+        if size == 0:
+            continue
         
-        start_range, end_range = cumulative_size, cumulative_size + size
+        start_range = cumulative_size
+        end_range = cumulative_size + size
+        
         indices_in_this_area_range = global_indices_to_sample[
             (global_indices_to_sample >= start_range) & (global_indices_to_sample < end_range)
         ]
+
         if len(indices_in_this_area_range) > 0:
             local_indices = indices_in_this_area_range - start_range
+            
             ds_single = CommutingODPairDataset(data_dir, [area])
             X_area = np.stack([ds_single[i]["x"] for i in local_indices])
             y_area = np.stack([ds_single[i]["y"] for i in local_indices])
+            
             X_list.append(X_area)
             y_list.append(y_area)
+
         cumulative_size += size
 
     X = np.concatenate(X_list, axis=0)
     y = np.concatenate(y_list, axis=0)
     
     final_shuffle_idx = np.random.permutation(len(X))
-    return X[final_shuffle_idx], y[final_shuffle_idx]
+    X = X[final_shuffle_idx]
+    y = y[final_shuffle_idx]
+
+    return X, y
 
 
 def train_and_evaluate_svr(X_train, y_train, X_test, y_test, target_id, args):
-    """
-    SVRモデルを学習させ、評価し、モデルを保存する関数。
-    """
+    """SVRモデルを学習させ、評価し、モデルを保存する関数。"""
     print(f"    [Train] Starting SVR training...", flush=True)
-    model = SVR() # Optunaを使わないので、デフォルトのSVR
+    model = SVR() 
     model.fit(X_train, y_train)
     
     pred = model.predict(X_test)
     mse = mean_squared_error(y_test, pred)
 
-    # --- モデルの保存 ---
     if args.model_output_dir:
         model_save_dir = os.path.join(
             args.model_output_dir, "svr", args.condition,
@@ -95,7 +102,8 @@ def train_and_evaluate_svr(X_train, y_train, X_test, y_test, target_id, args):
         os.makedirs(model_save_dir, exist_ok=True)
         
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        fname = f"svr_target{target_id}_{now}.joblib"
+        param_str = f"topk{args.top_k}_ms{args.max_samples}"
+        fname = f"svr_target{target_id}_{param_str}_{now}.joblib"
         save_path = os.path.join(model_save_dir, fname)
         
         joblib.dump(model, save_path)
@@ -103,17 +111,13 @@ def train_and_evaluate_svr(X_train, y_train, X_test, y_test, target_id, args):
 
     return mse
 
-
 def run_all_targets(area_ids, dist_mat, source_ids, args):
-    """
-    全てのターゲット都市に対して評価を実行し、結果をリストで返す。
-    """
+    """全てのターゲット都市に対して評価を実行し、結果をリストで返す。"""
     print(f"[INFO] Loading targets from {args.targets_path}", flush=True)
     with open(args.targets_path) as f:
         targets_raw = [line.strip() for line in f if line.strip()]
     targets = [t for t in targets_raw if t in area_ids]
 
-    # --- "all"コンディションの場合、学習データを事前に一度だけ準備 ---
     X_train_all, y_train_all = None, None
     if args.condition == "all":
         print("[INFO] Condition is 'all'. Pre-loading training data once...", flush=True)
@@ -126,6 +130,9 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
 
     results_list = []
     print(f"[INFO] Evaluating {len(targets)} targets...", flush=True)
+    
+    # sidxの計算をループの外に移動（最適化）
+    sidx = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
 
     for target in tqdm(targets, desc="Evaluating Targets"):
         print(f"--- Evaluating target: {target} ---", flush=True)
@@ -136,7 +143,6 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
                 X_train, y_train = X_train_all, y_train_all
             else:
                 tidx = np.where(area_ids == target)[0][0]
-                sidx = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
                 dists = dist_mat[tidx, sidx]
 
                 if args.condition == "topk":
@@ -176,7 +182,6 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
             })
             
     return results_list
-
 
 def main():
     parser = argparse.ArgumentParser(description="Selective Transfer Learning with SVR")
@@ -218,7 +223,6 @@ def main():
     )
     os.makedirs(results_save_dir, exist_ok=True)
     
-    # SVRのチューニングパラメータを元にファイル名を生成
     param_str = (
         f"topk{args.top_k}"
         f"_ms{args.max_samples}"
