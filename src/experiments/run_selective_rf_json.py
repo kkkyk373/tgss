@@ -170,7 +170,7 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
                 selected_areas = area_ids[selected_indices]
                 X_train, y_train = extract_xy(args.data_dir, selected_areas, args.max_samples, seed=args.seed)
 
-             # --- 3. データチェックと学習・評価 ---
+            # --- 3. データチェックと学習・評価 ---
             if len(X_train) == 0:
                 status, mse_val = "skipped_no_train_data", None
             elif len(X_test) == 0:
