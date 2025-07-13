@@ -3,8 +3,7 @@
 #SBATCH --partition=cluster_low
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=40G
-#SBATCH --time=24:00:00 # SVRはDGMより速いと想定し、時間を短縮
-# Total jobs: 2(cond) * 5(ms) = 10
+#SBATCH --time=3-00:00:00 # 3日間の実行時間
 #SBATCH --array=0-9
 #SBATCH --output=logs/svr_tuning/step1_samples/%x_%a.out
 #SBATCH --error=logs/svr_tuning/step1_samples/%x_%a.err

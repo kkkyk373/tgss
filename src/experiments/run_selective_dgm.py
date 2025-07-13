@@ -307,8 +307,12 @@ def main():
     )
     os.makedirs(results_save_dir, exist_ok=True)
     
-    now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = f"dgm_results_{now_str}.json"
+    param_str = (
+        f"ms{args.max_samples}"
+        f"_bs{args.batch_size}"
+        f"_ep{args.epochs}"
+    )
+    fname = f"{param_str}.json"
     
     output_path = os.path.join(results_save_dir, fname)
 

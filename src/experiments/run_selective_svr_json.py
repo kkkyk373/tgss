@@ -211,17 +211,25 @@ def main():
     }
     
     results_save_dir = os.path.join(
-        args.results_dir, "svr", "raw", args.condition,
-        f"alpha{args.alpha}", f"seed{args.seed}"
+        args.results_dir, "svr", "raw",
+        args.condition,
+        f"alpha{args.alpha}",
+        f"seed{args.seed}"
     )
     os.makedirs(results_save_dir, exist_ok=True)
     
-    fname = f"svr_results_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    # SVRのチューニングパラメータを元にファイル名を生成
+    param_str = (
+        f"topk{args.top_k}"
+        f"_ms{args.max_samples}"
+    )
+    fname = f"{param_str}.json"
+    
     output_path = os.path.join(results_save_dir, fname)
 
     with open(output_path, 'w') as f:
         json.dump(final_output, f, indent=4)
-        
+
     print(f"\n[INFO] Successfully saved evaluation results to: {output_path}")
 
 if __name__ == "__main__":
