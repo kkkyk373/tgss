@@ -10,7 +10,7 @@
 # --- パラメータ定義 (ここを編集して実験を制御) ---
 CONDITIONS=("topk" "random" "bottomk" "all")
 ALPHAS=(0 50 100)
-SEEDS=(0 1 2)
+SEEDS=(3 4 5)
 
 # --- パラメータ組み合わせを事前に定義 ---
 PARAMS=()
