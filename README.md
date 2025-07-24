@@ -1,6 +1,6 @@
-# JComm
+# JCOMM
 
-JCommは、通勤データに対する各種回帰モデル（Random Forest、SVR、Deep Gravity Model など）を用いた選択的転移学習の実験環境です。  
+JCOMMは、通勤データに対する各種回帰モデル（Random Forest、SVR、Deep Gravity Model など）を用いた選択的転移学習の実験環境です。  
 FGW距離行列などを活用し、ターゲットエリアとソースエリアの選定戦略を試行できる構造になっています。
 
 ## Requirements
