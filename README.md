@@ -1,20 +1,18 @@
-# JCOMM
+# 概要
 
-JCOMMは、通勤データに対する各種回帰モデル（Random Forest、SVR、Deep Gravity Model など）を用いた選択的転移学習の実験環境です。  
-FGW距離行列などを活用し、ターゲットエリアとソースエリアの選定戦略を試行できる構造になっています。
+グラフに対する各種回帰モデル（Random Forest、SVR、ANN など）を用いた選択的転移学習の実験コードです。 
+FGW距離行列などを活用し、ターゲットエリアとソースエリアの選定戦略を試行する。
 
 ## Requirements
 
 以下のパッケージが必要です（詳細は [requirements.txt](requirements.txt) を参照してください）:
 - matplotlib
-- ott-jax
 - POT
 - torch
 - tqdm
 - scikit-learn
 - numpy
 - pandas
-- optuna
 
 ## Directory Structure
 

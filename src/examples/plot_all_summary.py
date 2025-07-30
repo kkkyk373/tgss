@@ -1,117 +1,149 @@
 import pandas as pd
 import numpy as np
-import seaborn as sns
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Dict, List, Optional
+from matplotlib.patches import Patch
+from typing import Dict, List
 
 def plot_all_summaries(
     summary_files: Dict[str, str],
-    output_path: str
+    output_path: str,
+    log_scale: bool = False,
+    showfliers: bool = False
 ) -> None:
     """
-    複数のモデルのサマリーCSVを読み込み、比較用の箱ひげ図を生成する。
-    'all'と'random'の結果を、各alphaの値に共通で表示する。
-    
-    Args:
-        summary_files: モデル名をキー、CSVファイルパスを値とする辞書。
-        output_path: 生成したグラフの保存先パス。
+    Load summary CSVs, compute RMSE, and plot boxplots of overall RMSE
+    by model, alpha, and condition. Saves to output_path.
     """
-    all_dfs: List[pd.DataFrame] = []
-    
-    # --- 1. 各モデルのサマリーCSVを読み込み、結合する ---
-    for model_name, path_str in summary_files.items():
-        path = Path(path_str)
-        if not path.exists():
-            print(f"⚠️ Warning: File for {model_name} not found at '{path}'. Skipping.")
+    # --- 1. Load and concatenate data ---
+    dfs: List[pd.DataFrame] = []
+    for model, path_str in summary_files.items():
+        p = Path(path_str)
+        if not p.exists():
+            print(f"⚠️ Warning: '{model}' file not found: {p}")
             continue
-        
-        df = pd.read_csv(path)
-        df['model'] = model_name
-        all_dfs.append(df)
+        df = pd.read_csv(p)
+        df['model'] = model
+        df['overall_rmse'] = np.sqrt(df['overall_mse'])
+        dfs.append(df)
 
-    if not all_dfs:
-        print("❌ Error: No summary files could be loaded.")
+    if not dfs:
+        print("❌ No summary files loaded. Aborting.")
         return
+    data = pd.concat(dfs, ignore_index=True)
 
-    combined_df: pd.DataFrame = pd.concat(all_dfs, ignore_index=True)
-
-    # --- 2. データ準備 ---
-    print("🛠️  Processing data to broadcast 'all' and 'random' conditions...")
-    combined_df['overall_rmse'] = np.sqrt(combined_df['overall_mse'])
-
-    # a) Alphaに依存するデータ (topk, bottomk)
-    alpha_dependent_df = combined_df[combined_df['condition'].isin(['topk', 'bottomk'])].copy()
-    
-    # b) Alphaに依存しないデータ (random, all)
-    alpha_independent_df = combined_df[combined_df['condition'].isin(['random', 'all'])].copy()
-
-    # c) 存在するalphaのユニークな値を取得
-    alphas_to_broadcast = sorted(alpha_dependent_df['alpha'].dropna().unique())
-    if not alphas_to_broadcast:
-        print("⚠️ Warning: No specific alpha values found for 'topk'/'bottomk'. Cannot broadcast.")
-        # alpha依存データがない場合は、元のDFをそのまま使う
-        final_df = combined_df
+    # --- 2. Broadcast 'random'/'all' to all alphas for consistent plotting ---
+    alpha_dependent = data[data['condition'].isin(['topk','bottomk'])]
+    alpha_independent = data[data['condition'].isin(['random','all'])]
+    alphas = sorted(alpha_dependent['alpha'].dropna().unique())
+    if alphas and not alpha_independent.empty:
+        replicated = pd.concat([
+            alpha_independent.assign(alpha=a) for a in alphas
+        ], ignore_index=True)
+        final_df = pd.concat([alpha_dependent, replicated], ignore_index=True)
     else:
-        # d) 'random'と'all'のデータを各alpha値に複製
-        broadcasted_dfs = []
-        if not alpha_independent_df.empty:
-            for alpha_val in alphas_to_broadcast:
-                temp_df = alpha_independent_df.copy()
-                temp_df['alpha'] = alpha_val
-                broadcasted_dfs.append(temp_df)
-            
-            broadcasted_df = pd.concat(broadcasted_dfs, ignore_index=True)
-            # e) データを再結合
-            final_df = pd.concat([alpha_dependent_df, broadcasted_df], ignore_index=True)
-        else:
-            final_df = alpha_dependent_df
+        final_df = data.copy()
 
-    # --- 3. グラフ描画のための最終準備 ---
-    model_order: List[str] = ['SVR', 'RF', 'DGM']
-    condition_order: List[str] = ['all', 'topk', 'random', 'bottomk']
+    # --- 3. Setup orders and colors ---
+    model_order = ['SVR', 'RF', 'DGM']
+    cond_order  = ['all', 'topk', 'random', 'bottomk']
+    color_map = {
+        'all':    '#1f77b4',
+        'topk':   '#ff7f0e',
+        'random': '#2ca02c',
+        'bottomk':'#d62728',
+    }
 
-    final_df['model'] = pd.Categorical(final_df['model'], categories=model_order, ordered=True)
-    final_df['condition'] = pd.Categorical(final_df['condition'], categories=condition_order, ordered=True)
+    # --- 4. Create subplots ---
+    n_models = len(model_order)
+    fig, axes = plt.subplots(1, n_models, sharey=True,
+                             figsize=(5*n_models, 6))
 
-    # --- 4. Seabornを使ってグラフを描画 ---
-    print("🎨 Generating plot...")
-    sns.set_theme(style="whitegrid")
-    
-    g: sns.FacetGrid = sns.catplot(
-        data=final_df,
-        x='alpha',
-        y='overall_rmse',
-        hue='condition',
-        col='model',
-        kind='box',
-        order=alphas_to_broadcast,
-        hue_order=condition_order,
-        height=6,
-        aspect=0.8,
-        legend_out=False  # ★★★ 1. 凡例をグラフの内側に配置する設定 ★★★
+    for ax, model in zip(axes, model_order):
+        df_model = final_df[final_df['model'] == model]
+        n_cond = len(cond_order)
+
+        # Collect data and positions
+        box_data = []
+        colors = []
+        positions = []
+
+        for i, a in enumerate(alphas):
+            base = i * (n_cond + 1)
+            for j, cond in enumerate(cond_order):
+                vals = df_model.loc[
+                    (df_model['alpha'] == a) &
+                    (df_model['condition'] == cond),
+                    'overall_rmse'
+                ].values
+                box_data.append(vals if vals.size else [np.nan])
+                colors.append(color_map.get(cond, '#ccc'))
+                positions.append(base + j)
+
+        # Draw boxplot with custom median line
+        bp = ax.boxplot(
+            box_data,
+            positions=positions,
+            widths=0.6,
+            patch_artist=True,
+            showfliers=showfliers,
+            whis=1.5,
+            medianprops=dict(color='black', linewidth=2)
+        )
+        for patch, c in zip(bp['boxes'], colors):
+            patch.set_facecolor(c)
+
+        # X-axis: ticks at group centers
+        centers = [i*(n_cond+1) + (n_cond-1)/2 for i in range(len(alphas))]
+        ax.set_xticks(centers)
+        ax.set_xticklabels([f"α={a}" for a in alphas], rotation=0)
+        ax.set_xlabel("Alpha")
+
+        # Optional log scale
+        if log_scale:
+            ax.set_yscale('log')
+        ax.set_title(model)
+        if ax is axes[0]:
+            ax.set_ylabel("Overall RMSE")
+        ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+
+    # --- 5. Add legend ---
+    label_map = {
+        'all':      'all',
+        'topk':     'topk',
+        'random':   'randomk',
+        'bottomk':  'bottomk'
+    }
+
+    handles = [Patch(color=color_map[c], label=label_map[c]) for c in cond_order]
+    fig.legend(
+        handles=handles,
+        loc='upper left',
+        bbox_to_anchor=(0.1, 0.9),
+        borderaxespad=0.,
+        title_fontsize=18,
+        fontsize=18,
     )
-    
-    g.fig.suptitle('Performance of Source Selection Strategies Across Models', y=1.03)
-    g.set_axis_labels("Alpha Parameter", "Overall Root Mean Squared Error (RMSE)")
-    g.set_titles("Model: {col_name}")
-    
-    # ★★★ 2. 凡例を左上に移動し、タイトルを設定 ★★★
-    sns.move_legend(g, "upper left", bbox_to_anchor=(0.1, 0.8), title="Selection Condition")
 
-    # --- 5. グラフを保存 ---
+    # --- 6. Print statistics ---. Print statistics ---
+    print("\nMean & Std of RMSE by model, condition, alpha:")
+    stats = final_df.groupby(['model','condition','alpha'])['overall_rmse']
+    stats = stats.agg(['mean','std']).round(3).reset_index()
+    print(stats.to_string(index=False))
+
+    # --- 7. Save and show ---
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"\n✅ Comparison chart saved as '{output_path}'")
+    print(f"✅ Saved to {output_path}")
     plt.show()
 
 
 if __name__ == '__main__':
     summary_files = {
-        "DGM": "outputs/dgm_summary.csv",
-        "SVR": "outputs/svr_summary.csv",
-        "RF": "outputs/rf_summary.csv"
+        'DGM': 'outputs/dgm_summary.csv',
+        'SVR': 'outputs/svr_summary.csv',
+        'RF':  'outputs/rf_summary.csv'
     }
-    output_path = "outputs/comparison_plot_unified.png"
-
-    plot_all_summaries(summary_files, output_path)
+    plot_all_summaries(summary_files, 'outputs/comparison_plot.png')
