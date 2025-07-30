@@ -1,3 +1,4 @@
+# === run_selective_svr.py (modified) ===
 import argparse
 import numpy as np
 import json
@@ -5,7 +6,7 @@ import datetime
 import os
 import random
 import sys
-import joblib 
+import joblib
 from tqdm import tqdm
 from sklearn.svm import SVR
 from sklearn.metrics import mean_squared_error
@@ -171,11 +172,13 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
             }
             results_list.append(result_item)
             
-            if status == "success": print(f"   -> MSE: {mse_val:.4f}\n", flush=True)
-            else: print(f"   -> Skipped: {status}\n", flush=True)
+            if status == "success":
+                print(f"    -> MSE: {mse_val:.4f}\n", flush=True)
+            else:
+                print(f"    -> Skipped: {status}\n", flush=True)
 
         except Exception as e:
-            print(f"   [ERROR] Failed on target {target}: {e}\n", file=sys.stderr, flush=True)
+            print(f"    [ERROR] Failed on target {target}: {e}\n", file=sys.stderr, flush=True)
             results_list.append({
                 "target_id": target, "mse": None, "test_samples": 0,
                 "train_samples": 0, "status": "error", "error_message": str(e)
