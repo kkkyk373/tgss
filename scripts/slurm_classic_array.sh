@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=rf_all_exp
-#SBATCH --partition=cpu_long   # RFはCPUで動作するため、GPUパーティションから変更
-#SBATCH --cpus-per-task=8      # RFはマルチコアの恩恵を受けるため、コア数は維持
+#SBATCH --partition=cluster_long 
+#SBATCH --cpus-per-task=8      # マルチコアの恩恵を受けるため、コア数は維持
 #SBATCH --mem=40G              # データ量に応じてメモリを確保
 #SBATCH --time=1-00:00:00      # 実行時間（必要に応じて調整）
 #SBATCH --array=0-9            # seed 0-9 に対応するため、10個のジョブ (0から9まで)
