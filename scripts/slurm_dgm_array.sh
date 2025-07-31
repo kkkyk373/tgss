@@ -5,12 +5,12 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=40G
 #SBATCH --time=3-00:00:00
-#SBATCH --array=0-29 # 0-29 for 30 total jobs (27 with alpha × seed for topk/random/bottomk + 3 for all)
+#SBATCH --array=0-9 # alpha × seed x topk/random/bottomk + 1(all)
 
 # --- パラメータ定義 (ここを編集して実験を制御) ---
 CONDITIONS=("topk" "random" "bottomk" "all")
 ALPHAS=(0 50 100)
-SEEDS=(6 7 8)
+SEEDS=(9)
 
 # --- パラメータ組み合わせを事前に定義 ---
 PARAMS=()
