@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=rf_all_exp
+#SBATCH --job-name=svr_all_exp
 #SBATCH --partition=cluster_long 
 #SBATCH --cpus-per-task=8      # マルチコアの恩恵を受けるため、コア数は維持
 #SBATCH --mem=40G              # データ量に応じてメモリを確保
@@ -21,14 +21,14 @@ done
 read PARAM_COND PARAM_ALPHA PARAM_SEED <<< "${PARAMS[$SLURM_ARRAY_TASK_ID]}"
 
 # --- ログ設定 ---
-LOG_DIR="logs/rf_all_exp/${PARAM_COND}" # alphaは不要なためディレクトリ構造を簡略化
+LOG_DIR="logs/svr_all_exp/${PARAM_COND}" # alphaは不要なためディレクトリ構造を簡略化
 mkdir -p ${LOG_DIR}
 export OUT_FILE="${LOG_DIR}/${SLURM_JOB_ID}_seed${PARAM_SEED}.out"
 export ERR_FILE="${LOG_DIR}/${SLUM_JOB_ID}_seed${PARAM_SEED}.err"
 exec > "$OUT_FILE" 2> "$ERR_FILE"
 
 # --- 環境設定と実行 ---
-echo "--- RF 'all' condition Experiment ---"
+echo "--- SVR 'all' condition Experiment ---"
 echo "Job ID: ${SLURM_JOB_ID}, Array Task ID: ${SLURM_ARRAY_TASK_ID}"
 echo "Timestamp: $(date)"
 echo "Parameters: condition=${PARAM_COND}, alpha=${PARAM_ALPHA} (dummy), seed=${PARAM_SEED}"
@@ -38,7 +38,7 @@ echo "----------------------"
 source /work/hideki-h/jcomm/env/bin/activate
 
 # Pythonスクリプトの実行
-PYTHONPATH=. python src/experiments/run_selective_rf.py \
+PYTHONPATH=. python src/experiments/run_selective_svr.py \
     --data_dir "/work/hideki-h/jcomm/ComOD-dataset/data" \
     --fgw_dir "/work/hideki-h/jcomm/ComOD-dataset/outputs" \
     --targets_path "source_target_lists/targets_seed${PARAM_SEED}.txt" \
