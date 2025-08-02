@@ -24,7 +24,7 @@ read PARAM_COND PARAM_ALPHA PARAM_SEED <<< "${PARAMS[$SLURM_ARRAY_TASK_ID]}"
 LOG_DIR="logs/svr_all_exp/${PARAM_COND}" # alphaは不要なためディレクトリ構造を簡略化
 mkdir -p ${LOG_DIR}
 export OUT_FILE="${LOG_DIR}/${SLURM_JOB_ID}_seed${PARAM_SEED}.out"
-export ERR_FILE="${LOG_DIR}/${SLUM_JOB_ID}_seed${PARAM_SEED}.err"
+export ERR_FILE="${LOG_DIR}/${SLURM_JOB_ID}_seed${PARAM_SEED}.err"
 exec > "$OUT_FILE" 2> "$ERR_FILE"
 
 # --- 環境設定と実行 ---
