@@ -1,3 +1,4 @@
+# === run_selective_rf.py (modified) ===
 import argparse
 import numpy as np
 import json
@@ -5,7 +6,7 @@ import datetime
 import os
 import random
 import sys
-import joblib 
+import joblib
 from tqdm import tqdm
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
@@ -122,16 +123,11 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
     targets = [t for t in targets_raw if t in area_ids]
 
     X_train_all, y_train_all = None, None
-
     if args.condition == "all":
-
         print("[INFO] Condition is 'all'. Pre-loading training data once...", flush=True)
-
         sidx_all = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
         selected_areas_all = area_ids[sidx_all]
-
         X_train_all, y_train_all = extract_xy(args.data_dir, selected_areas_all, args.max_samples, seed=args.seed)
-
         if len(X_train_all) == 0:
             print("[ERROR] Pre-loading failed for 'all' condition. Aborting.", file=sys.stderr, flush=True)
             return []
@@ -143,9 +139,7 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
     sidx = np.array([np.where(area_ids == sid)[0][0] for sid in source_ids if sid in area_ids])
 
     for target in tqdm(targets, desc="Evaluating Targets"):
-
         print(f"--- Evaluating target: {target} ---", flush=True)
-
         try:
             # --- 1. テストデータを読み込む (毎回必須) ---
             X_test, y_test = extract_xy(args.data_dir, [target], max_samples=None, seed=args.seed)
@@ -153,7 +147,6 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
             # --- 2. 学習データを準備する ---
             if args.condition == "all":
                 X_train, y_train = X_train_all, y_train_all
-
             else:
                 tidx = np.where(area_ids == target)[0][0]
                 dists = dist_mat[tidx, sidx]
@@ -186,11 +179,11 @@ def run_all_targets(area_ids, dist_mat, source_ids, args):
             }
             results_list.append(result_item)
             
-            if status == "success": print(f"   -> MSE: {mse_val:.4f}\n", flush=True)
-            else: print(f"   -> Skipped: {status}\n", flush=True)
+            if status == "success": print(f"    -> MSE: {mse_val:.4f}\n", flush=True)
+            else: print(f"    -> Skipped: {status}\n", flush=True)
 
         except Exception as e:
-            print(f"   [ERROR] Failed on target {target}: {e}\n", file=sys.stderr, flush=True)
+            print(f"    [ERROR] Failed on target {target}: {e}\n", file=sys.stderr, flush=True)
             results_list.append({
                 "target_id": target, "mse": None, "test_samples": 0,
                 "train_samples": 0, "status": "error", "error_message": str(e)

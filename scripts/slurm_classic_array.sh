@@ -1,71 +1,54 @@
 #!/bin/bash
-#SBATCH --job-name=fgw_selective
-#SBATCH --partition=cluster_low
-#SBATCH --cpus-per-task=8
-#SBATCH --array=0-39 # 10 seeds × (3 conditions)+ 10 seeds × 'all' condition = 40 job
-#SBATCH --time=100:00:00 # 最大100時間まで増やす
-#SBATCH --output=logs/%x_%A_%a.out
-#SBATCH --error=logs/%x_%A_%a.err
+#SBATCH --job-name=svr_all_exp
+#SBATCH --partition=cluster_long 
+#SBATCH --cpus-per-task=8      # マルチコアの恩恵を受けるため、コア数は維持
+#SBATCH --mem=40G              # データ量に応じてメモリを確保
+#SBATCH --time=40:00:00      # 実行時間（必要に応じて調整）
+#SBATCH --array=0-9            # seed 0-9 に対応するため、10個のジョブ (0から9まで)
 
-# === 対応するSEEDと条件をマッピング ===
-seeds=(0 0 0 1 1 1 2 2 2 3 3 3 4 4 4 5 5 5 6 6 6 7 7 7 8 8 8 9 9 9 \
-       0 1 2 3 4 5 6 7 8 9) # 'all' 条件用のシードを追加
-conds=("topk" "bottomk" "random" "topk" "bottomk" "random" "topk" "bottomk" "random" \
-       "topk" "bottomk" "random" "topk" "bottomk" "random" "topk" "bottomk" "random" \
-       "topk" "bottomk" "random" "topk" "bottomk" "random" "topk" "bottomk" "random" \
-       "topk" "bottomk" "random" \
-       "all" "all" "all" "all" "all" "all" "all" "all" "all" "all") # 新しい 'all' 条件
+# --- パラメータ定義 ---
+SEEDS=(0 1 2 3 4 5 6 7 8 9)
 
-SEED=${seeds[$SLURM_ARRAY_TASK_ID]}
-COND=${conds[$SLURM_ARRAY_TASK_ID]}
+# --- パラメータ組み合わせを事前に定義 (all条件のみ) ---
+PARAMS=()
+for seed in "${SEEDS[@]}"; do
+    # condition="all", alpha=0 (all条件ではalpha値は使われないダミー), seed
+    PARAMS+=("all 0 ${seed}")
+done
 
-# === 実験設定 ===
-MODEL="svr_opt"
-ALPHA=0 
-TOP_K=100
-MAX_SAMPLES=5000
-DATE=$(date +%Y%m%d_%H%M)
-OPTUNA_N_TRIALS=50
-OPTUNA_TIMEOUT=600
+# --- SlurmタスクIDからパラメータを取得 ---
+# SLURM_ARRAY_TASK_ID は 0 から始まる
+read PARAM_COND PARAM_ALPHA PARAM_SEED <<< "${PARAMS[$SLURM_ARRAY_TASK_ID]}"
 
-# === パス設定 ===
-DATA_DIR="/work/hideki-h/jcomm/ComOD-dataset/data"
-FGW_DIR="/work/hideki-h/jcomm/ComOD-dataset/outputs"
-TARGETS_PATH="source_target_lists/targets_seed${SEED}.txt"
-SOURCES_PATH="source_target_lists/sources_seed${SEED}.txt"
-SCRIPT="src/experiments/run_selective_${MODEL}.py"
-RESULTS_DIR="results"
-LOG_DIR="logs"
+# --- ログ設定 ---
+LOG_DIR="logs/svr_all_exp/${PARAM_COND}" # alphaは不要なためディレクトリ構造を簡略化
+mkdir -p ${LOG_DIR}
+export OUT_FILE="${LOG_DIR}/${SLURM_JOB_ID}_seed${PARAM_SEED}.out"
+export ERR_FILE="${LOG_DIR}/${SLURM_JOB_ID}_seed${PARAM_SEED}.err"
+exec > "$OUT_FILE" 2> "$ERR_FILE"
 
-mkdir -p "$RESULTS_DIR" "$LOG_DIR"
+# --- 環境設定と実行 ---
+echo "--- SVR 'all' condition Experiment ---"
+echo "Job ID: ${SLURM_JOB_ID}, Array Task ID: ${SLURM_ARRAY_TASK_ID}"
+echo "Timestamp: $(date)"
+echo "Parameters: condition=${PARAM_COND}, alpha=${PARAM_ALPHA} (dummy), seed=${PARAM_SEED}"
+echo "----------------------"
+
+# 仮想環境のアクティベート
 source /work/hideki-h/jcomm/env/bin/activate
-cd /work/hideki-h/jcomm
 
-# === 出力ファイル名生成の調整 ===
-# 'all' 条件の場合、ALPHA_STR を 'all' にする
-if [ "$COND" == "all" ]; then
-    ALPHA_STR="all"
-else
-    ALPHA_STR="${ALPHA_VAL}"
-fi
+# Pythonスクリプトの実行
+PYTHONPATH=. python src/experiments/run_selective_svr.py \
+    --data_dir "/work/hideki-h/jcomm/ComOD-dataset/data" \
+    --fgw_dir "/work/hideki-h/jcomm/ComOD-dataset/outputs" \
+    --targets_path "source_target_lists/targets_seed${PARAM_SEED}.txt" \
+    --sources_path "source_target_lists/sources_seed${PARAM_SEED}.txt" \
+    --results_dir "results" \
+    --model_output_dir "outputs" \
+    --condition "${PARAM_COND}" \
+    --alpha ${PARAM_ALPHA} \
+    --seed ${PARAM_SEED} \
+    --max_samples 50000
 
-
-# === 出力ファイル名 ===
-OUTFILE="${RESULTS_DIR}/topk${TOP_K}_alpha${ALPHA_STR}_selective_seed${SEED}_${COND}_${MODEL}_max${MAX_SAMPLES}_${DATE}.txt"
-
-
-# === 実行 ===
-PYTHONPATH=. python -u "$SCRIPT" \
-    --data_dir "$DATA_DIR" \
-    --fgw_dir "$FGW_DIR" \
-    --targets_path "$TARGETS_PATH" \
-    --sources_path "$SOURCES_PATH" \
-    --condition "$COND" \
-    --alpha "$ALPHA" \
-    --top_k "$TOP_K" \
-    --bottom_k "$TOP_K" \
-    --max_samples "$MAX_SAMPLES" \
-    --seed "$SEED" \
-    --optuna_n_trials "$OPTUNA_N_TRIALS" \
-    --optuna_timeout "$OPTUNA_TIMEOUT" \
-    > "$OUTFILE"
+echo "--- Job Finished ---"
+echo "Timestamp: $(date)"
