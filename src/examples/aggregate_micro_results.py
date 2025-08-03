@@ -1,3 +1,9 @@
+"""
+ペア単位での結果を集計し、全体の平均MSE==over_mseを算出するスクリプト
+この場合のサンプル数は227個のグラフケースではなく, sum(グラフ[i]のペア数)を使用
+
+ユースケース: seed値を変えた場合のmseもしくはrmseを確率変数として平均と標準偏差を算出する
+"""
 import os
 import glob
 import json
@@ -7,7 +13,7 @@ import numpy as np
 def aggregate_results_from_json(
     model_name="svr",
     input_root_dir="results/model/options",
-    output_csv_path="outputs/model_summary.csv"
+    output_csv_path="outputs/model_pair_summary.csv"
 ):
     """
     指定されたディレクトリ以下の全てのJSON結果ファイルを集計
@@ -91,18 +97,18 @@ if __name__ == '__main__':
     aggregate_results_from_json(
         model_name="svr_raw",
         input_root_dir="results/svr/raw",
-        output_csv_path="outputs/svr_summary.csv"
+        output_csv_path="outputs/svr_pair_summary.csv"
     )
     
     # RF (raw)
     aggregate_results_from_json(
         model_name="rf_raw",
         input_root_dir="results/rf/raw",
-        output_csv_path="outputs/rf_summary.csv"
+        output_csv_path="outputs/rf_pair_summary.csv"
     ) 
 
     aggregate_results_from_json(
         model_name="dgm",
         input_root_dir="results/dgm/raw",
-        output_csv_path="outputs/dgm_summary.csv"
+        output_csv_path="outputs/dgm_pair_summary.csv"
     )
