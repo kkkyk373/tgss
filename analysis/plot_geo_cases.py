@@ -1,14 +1,15 @@
 import geopandas as gpd
 import matplotlib.pyplot as plt
 from IPython.display import SVG, display
-
+import os
 areas = ['17097', '32003']
 
 for area in areas:
 
     print(f"Processing area: {area}")
 
-    shapefile_path = f"/Users/hideki-h/Desktop/実験用データ/ComOD-dataset/assets/Boundaries_Regions_within_Areas/{area}/{area}.shp"
+    base_dir = os.environ.get("SHAPEFILE_BASE_DIR", "assets/Boundaries_Regions_within_Areas")
+    shapefile_path = os.path.join(base_dir, area, f"{area}.shp")
 
     gdf = gpd.read_file(shapefile_path)
     print(gdf.head())
