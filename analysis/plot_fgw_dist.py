@@ -56,13 +56,13 @@ fig.colorbar(dummy_im, cax=axes[1, 3], label="Individual Normalized Distance")
 
 
 fig.subplots_adjust(
-    top=0.95,      # 全体タイトルとの間隔
-    left=0.05,    # 左端の余白
-    right=0.95,   # 右端の余白
-    bottom=0.05,  # 下端の余白
-    wspace=0.1,   # プロット間の左右の間隔
-    hspace=0.1,    # プロット間の上下の間隔
+    top=0.95,      # Spacing to the overall title
+    left=0.05,    # Left margin
+    right=0.95,   # Right margin
+    bottom=0.05,  # Bottom margin
+    wspace=0.1,   # Horizontal spacing between plots
+    hspace=0.1,    # Vertical spacing between plots
 )
 plt.savefig("figs/fgw_dist_comparison.png", dpi=300)
-plt.savefig("figs/fgw_dist_comparison.svg", dpi=300)  # SVG形式でも保存
+plt.savefig("figs/fgw_dist_comparison.svg", dpi=300)  # Also save as SVG format
 plt.show()
