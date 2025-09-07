@@ -1,3 +1,8 @@
+# TODO
+- グラフニューラルネットワークを用いた場合の実験
+    - GMEL https://app.paperpile.com/view/?id=7ec5d021-a69c-4b7e-b102-959e18d62788
+
+
 # 概要
 
 グラフに対する各種回帰モデル（Random Forest、SVR、ANN など）を用いた選択的転移学習の実験
