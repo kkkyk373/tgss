@@ -1,14 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import os
 
-
-area_ids_path = "/Users/hideki-h/Desktop/実験用データ/ComOD-dataset/outputs/fgw_area_ids.npy"
+base_dir = "outputs"
+area_ids_path = os.path.join(base_dir, "fgw_area_ids.npy")
 area_ids = np.load(area_ids_path)
 dist_mats = {}
 alphas = ['00', '50', '100']
 for alpha in alphas:
-    dist_mat_path = f"/Users/hideki-h/Desktop/実験用データ/ComOD-dataset/outputs/fgw_dist_{alpha}.dat"
+    dist_mat_path = os.path.join(base_dir, f"fgw_dist_{alpha}.dat")
     dist_mat = np.memmap(dist_mat_path, dtype=np.float32, mode="r", shape=(len(area_ids), len(area_ids)))
     dist_mats[alpha] = dist_mat
 
