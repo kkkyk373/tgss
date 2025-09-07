@@ -20,7 +20,7 @@ for area in areas:
     gdf.plot(ax=ax, edgecolor="black", facecolor="none")
 
     ax.set_axis_off() # 軸・枠を消す
-    fig.patch.set_alpha(0) # 背景透明
+    fig.patch.set_alpha(0) # Make background transparent
 
     plt.savefig(svg_path, format="svg", bbox_inches="tight", transparent=True)
     plt.close(fig)
