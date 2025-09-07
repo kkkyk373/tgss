@@ -19,10 +19,12 @@ ComOD-dataset.tar.gz
 errs/
 outs/
 logs/
-target_sets/
+
+# Models, Figures and Results
+models/
+figs/
 results/
-results.tar.gz
-outputs/
+*.tar.zip
 
 # Temporary files
 ._ComOD-dataset
@@ -31,7 +33,5 @@ outputs/
 .python-version
 ._ComOD-dataset
 .python-version
-rename.sh
-selective_results_*.csv
 Untitled.ipynb
 temps/
