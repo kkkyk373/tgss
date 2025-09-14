@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=grav18_select
-#SBATCH --partition=cluster_long
+#SBATCH --partition=gpu_short
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=40G
 #SBATCH --time=2-00:00:00

@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=fgw18
-#SBATCH --partition=cluster_short
+#SBATCH --partition=gpu_short
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=06:00:00
