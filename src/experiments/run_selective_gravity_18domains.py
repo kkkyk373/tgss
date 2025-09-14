@@ -62,7 +62,7 @@ def extract_xy_18domains(data_dir: str, areas, mass_col: int = 0, max_samples=No
     rng = np.random.default_rng(seed)
 
     if max_samples is None:
-        X_list, y_list = []
+        X_list, y_list = [], []
         for area in areas:
             F, C, Y = _load_area_arrays(data_dir, area)
             masses = F[:, mass_col]
@@ -312,4 +312,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
