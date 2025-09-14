@@ -32,13 +32,23 @@ jcomm/
 │   ├── utils/
 │   │   └── dataset.py                # CommutingODPairDataset の実装
 ├── scripts/                         # SLURMや実行用のスクリプト群
+├── ComOD-dataset
+├── syn-dataset
 ├── requirements.txt
 └── README.md
+
 ```
 
 ## Usage
 
-### 手元での実行例
+### 簡易データでの実行例
+```python
+python -m src.experiments.fgw_18domains --data_dir syn-dataset/18domains --output_dir syn-dataset/outputs/18domains --alphas 0.0 0.25 0.5 0.75 1.0
+```
+
+
+
+### 実データでの実行例
 
 Deep Gravity Model の実験は以下のように実行できます:
 
