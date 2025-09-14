@@ -11,8 +11,9 @@ env.bak/
 venv.bak/
 
 # Data
-ComOD-dataset/
 data/
+ComOD-dataset/
+Syn-dataset/
 ComOD-dataset.tar.gz
 
 # Logs

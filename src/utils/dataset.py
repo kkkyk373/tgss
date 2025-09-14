@@ -124,3 +124,101 @@ class CommutingODPairDataset(torch.utils.data.Dataset):
                             np.repeat(feat_d, N, axis=0),
                             dis], axis=2)              # (N,N,2F+1)
         return torch.from_numpy(x).float()             # (N,N,F)
+
+
+
+
+
+
+class Domains18Dataset(Dataset):
+    """
+    Dataset for the 18domains synthetic benchmark.
+
+    Expects `root` to contain 18 subdirectories, each with:
+      - F.npy:  (N, F_node)  node features (first column often mass)
+      - C.npy:  (N, N)       intra-graph distance/cost matrix
+      - Y.npy:  (N, N)       OD flows matrix
+      - meta.json: metadata (unused here)
+
+    Returns per-item dict: {"F": np.ndarray, "C": np.ndarray, "Y": np.ndarray, "area": str}
+    where `area` is the subdirectory name.
+    """
+
+    def __init__(self, root: str, areas=None):
+        self.root = root
+        if areas is None:
+            areas = [
+                d for d in os.listdir(root)
+                if not d.startswith('.') and os.path.isdir(os.path.join(root, d))
+            ]
+            areas = sorted(areas)
+        self.areas = list(areas)
+
+    def __len__(self):
+        return len(self.areas)
+
+    def __getitem__(self, idx):
+        area = self.areas[idx]
+        prefix = os.path.join(self.root, area)
+        F = np.load(os.path.join(prefix, 'F.npy'))  # (N, F_node)
+        C = np.load(os.path.join(prefix, 'C.npy'))  # (N, N)
+        Y = np.load(os.path.join(prefix, 'Y.npy'))  # (N, N)
+        return {"F": F, "C": C, "Y": Y, "area": area}
+
+
+class Domains18PairDataset(Dataset):
+    """
+    Pair-wise dataset for Gravity-style models over 18domains.
+
+    Builds samples (i, j) for every OD pair within each domain area.
+    x: (3,) = [origin_mass, dest_mass, distance_ij]
+    y: scalar = flow Y[i, j]
+
+    - `mass_col`: which column index in F to use as population/mass (default 0).
+    - `use_distance_log`: if True, keep raw distance, GravityPower will handle log internally anyway.
+    """
+
+    def __init__(self, root: str, areas=None, mass_col: int = 0):
+        self.root = root
+        if areas is None:
+            areas = [
+                d for d in os.listdir(root)
+                if not d.startswith('.') and os.path.isdir(os.path.join(root, d))
+            ]
+            areas = sorted(areas)
+        self.areas = list(areas)
+        self.mass_col = mass_col
+
+        self.samples = []
+        for area in self.areas:
+            prefix = os.path.join(self.root, area)
+            F = np.load(os.path.join(prefix, 'F.npy'))  # (N, F_node)
+            C = np.load(os.path.join(prefix, 'C.npy'))  # (N, N)
+            Y = np.load(os.path.join(prefix, 'Y.npy'))  # (N, N)
+
+            masses = F[:, self.mass_col]
+            N = len(masses)
+            for i in range(N):
+                for j in range(N):
+                    x = np.array([masses[i], masses[j], C[i, j]], dtype=np.float32)
+                    y = np.float32(Y[i, j])
+                    self.samples.append({
+                        "x": torch.from_numpy(x),
+                        "y": torch.tensor(y),
+                        "area": area,
+                        "i": i,
+                        "j": j,
+                    })
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        s = self.samples[idx]
+        return {
+            "x": s["x"],
+            "y": s["y"],
+            "area": s["area"],
+            "i": s["i"],
+            "j": s["j"],
+        }
