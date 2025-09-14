@@ -13,7 +13,7 @@ venv.bak/
 # Data
 data/
 ComOD-dataset/
-Syn-dataset/
+syn-dataset/
 ComOD-dataset.tar.gz
 
 # Logs
