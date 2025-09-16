@@ -144,6 +144,7 @@ def train_and_evaluate_gravity(X_train, y_train, X_test, y_test, target_id, args
 
     model = GravityPower().to(device)
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
+    eps = 1e-8
 
     model.train()
     print(f"    [Train] GravityPower for {args.epochs} epochs...")
@@ -152,8 +153,9 @@ def train_and_evaluate_gravity(X_train, y_train, X_test, y_test, target_id, args
         for xb, yb in train_dl:
             xb, yb = xb.to(device), yb.to(device)
             optim.zero_grad()
-            pred = model(xb)
-            loss = F.mse_loss(pred, yb)
+            pred_log = model(xb)
+            target_log = torch.log(yb + eps)
+            loss = F.mse_loss(pred_log, target_log)
             loss.backward()
             optim.step()
             total += loss.item() * xb.size(0)
@@ -161,7 +163,7 @@ def train_and_evaluate_gravity(X_train, y_train, X_test, y_test, target_id, args
 
     model.eval()
     with torch.no_grad():
-        pred = model(X_test_tensor.to(device)).cpu().numpy()
+        pred = model.predict_flow(X_test_tensor.to(device)).cpu().numpy()
     mse = float(mean_squared_error(y_test, pred))
 
     learned = {
@@ -303,7 +305,8 @@ def main():
         f"seed{args.seed}"
     )
     os.makedirs(save_dir, exist_ok=True)
-    fname = f"ms{args.max_samples}_bs{args.batch_size}_ep{args.epochs}.json"
+    lr_tag = f"{args.lr}".replace('.', 'p')
+    fname = f"ms{args.max_samples}_bs{args.batch_size}_ep{args.epochs}_lr{lr_tag}.json"
     path = os.path.join(save_dir, fname)
     with open(path, 'w') as f:
         json.dump(final_output, f, indent=2)

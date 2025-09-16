@@ -30,14 +30,16 @@ def train_gravity(model: torch.nn.Module, X_train: np.ndarray, y_train: np.ndarr
     model.to(device)
     model.train()
     opt = torch.optim.Adam(model.parameters(), lr=lr)
+    eps = 1e-8
 
     for _ in range(epochs):
         for xb, yb in dl:
             xb = xb.to(device)
             yb = yb.to(device)
             opt.zero_grad()
-            pred = model(xb)
-            loss = F.mse_loss(pred, yb)
+            pred_log = model(xb)
+            target_log = torch.log(yb + eps)
+            loss = F.mse_loss(pred_log, target_log)
             loss.backward()
             opt.step()
 
@@ -46,7 +48,7 @@ def evaluate_gravity(model: torch.nn.Module, X_test: np.ndarray, y_test: np.ndar
     model.eval()
     with torch.no_grad():
         X_tensor = torch.from_numpy(X_test).float().to(device)
-        pred = model(X_tensor).cpu().numpy()
+        pred = model.predict_flow(X_tensor).cpu().numpy()
     mse = mean_squared_error(y_test, pred)
     return mse
 
@@ -130,4 +132,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
