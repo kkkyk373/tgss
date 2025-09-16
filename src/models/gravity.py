@@ -83,13 +83,18 @@ class GravityPower(nn.Module):
         self.gamma = nn.Parameter(torch.tensor(1.0))
 
     def forward(self, x):
+        """Return log(flow) to keep the computation in a numerically stable range."""
         # 入力xの想定: [origin_pop, dest_pop, distance]
         origin_pop, dest_pop, distance = x[:, 0], x[:, 1], x[:, 2]
         eps = 1e-8
-        log_y = (self.alpha * torch.log(origin_pop + eps) + 
-                 self.beta * torch.log(dest_pop + eps) - 
+        log_y = (self.alpha * torch.log(origin_pop + eps) +
+                 self.beta * torch.log(dest_pop + eps) -
                  self.gamma * torch.log(distance + eps))
-        return torch.exp(log_y)
+        return log_y
+
+    def predict_flow(self, x):
+        """Exponentiate the log-flow for evaluation/inference time."""
+        return torch.exp(self.forward(x))
 
 
 class GravityExponential(nn.Module):
